@@ -29,8 +29,12 @@ class CostBreakdownSchema(BaseModel):
     transport_cost: float
     travel_cost: float
     total_estimated_cost: float
-    requested_budget: float
-    remaining_buffer: float
+    requested_budget: Optional[float] = None
+    remaining_buffer: float = 0.0
+    hotel_source: str = "Voyage Demo Provider"
+    hotel_is_live: bool = False
+    travel_source: str = "Voyage Demo Provider"
+    travel_is_live: bool = False
 
 class AgentEventSchema(BaseModel):
     id: str
@@ -56,7 +60,7 @@ class AgentRunResponse(BaseModel):
     status: str  # "completed" | "budget_warning" | "in_progress" | "error"
     destination: str
     duration_days: int
-    budget: float
+    budget: Optional[float] = None
     currency: str = "INR"
     estimated_total: float
     remaining_budget: float
@@ -65,6 +69,7 @@ class AgentRunResponse(BaseModel):
     itinerary: List[Dict[str, Any]]
     agent_events: List[AgentEventSchema]
     step_progress: List[StepProgressSchema]
+    provider_summary: Dict[str, Any] = Field(default_factory=dict)
     requires_approval: bool = False
     approval_request: Optional[ApprovalRequestSchema] = None
     is_budget_exceeded: bool = False

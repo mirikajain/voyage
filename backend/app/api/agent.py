@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/agent", tags=["Agent"])
 @router.post("/run", response_model=AgentRunResponse)
 async def run_agent(request: AgentRunRequest):
     """
-    Executes the LangGraph autonomous travel concierge graph powered by Google Gemini (or Demo fallback).
+    Executes the LangGraph autonomous travel concierge graph powered by Real Travel APIs & Google Gemini.
     """
     try:
         thread_id = request.thread_id or f"thread_{uuid.uuid4().hex[:12]}"
@@ -44,26 +44,37 @@ async def run_agent(request: AgentRunRequest):
         activities = final_state.get("selected_activities", {})
         transport = final_state.get("selected_transport", {})
 
-        hotel_cost = float(hotel.get("total_cost", 12800.0))
-        flight_cost = float(flight.get("price", 8000.0))
+        hotel_cost = float(hotel.get("total_price") or hotel.get("total_cost", 12800.0))
+        flight_cost = float(flight.get("price") or flight.get("total_price", 8000.0))
         dining_cost = float(dining.get("total_estimated", 7000.0))
         activities_cost = float(activities.get("total_estimated", 6500.0))
         transport_cost = float(transport.get("total_estimated", 3500.0))
         
         total_est = float(final_state.get("estimated_total", hotel_cost + flight_cost + dining_cost + activities_cost + transport_cost))
-        budget = float(final_state.get("budget", 40000.0))
-        remaining = float(final_state.get("remaining_budget", max(0.0, budget - total_est)))
+        
+        user_budget = final_state.get("budget")
+        budget_val = float(user_budget) if user_budget is not None else None
+        remaining = float(final_state.get("remaining_budget", max(0.0, (budget_val - total_est) if budget_val else 0.0)))
+
+        hotel_src = hotel.get("source", "Voyage Demo Provider")
+        hotel_live = bool(hotel.get("is_live", False))
+        travel_src = flight.get("source", "Voyage Demo Provider")
+        travel_live = bool(flight.get("is_live", False))
 
         breakdown = CostBreakdownSchema(
-            hotel_name=hotel.get("name", "Aria Beach Resort"),
+            hotel_name=hotel.get("name", "Boutique Residence"),
             hotel_cost=hotel_cost,
             dining_cost=dining_cost,
             activities_cost=activities_cost,
             transport_cost=transport_cost,
             travel_cost=flight_cost,
             total_estimated_cost=total_est,
-            requested_budget=budget,
-            remaining_buffer=remaining
+            requested_budget=budget_val,
+            remaining_buffer=remaining,
+            hotel_source=hotel_src,
+            hotel_is_live=hotel_live,
+            travel_source=travel_src,
+            travel_is_live=travel_live
         )
 
         approval_req = None
@@ -71,7 +82,7 @@ async def run_agent(request: AgentRunRequest):
             req_data = final_state["approval_request"]
             approval_req = ApprovalRequestSchema(
                 action=req_data.get("action", "BUILD_VOYAGE_TRIP"),
-                item=req_data.get("item", "Trip Package"),
+                item=req_data.get("item", f"{final_state.get('destination', 'Trip')} Package"),
                 amount=float(req_data.get("amount", total_est)),
                 currency=req_data.get("currency", "INR")
             )
@@ -97,12 +108,23 @@ async def run_agent(request: AgentRunRequest):
             for i, s in enumerate(final_state.get("step_progress", []))
         ]
 
+        prov_sum = final_state.get("provider_summary", {
+            "flights": {"provider": travel_src, "is_live": travel_live},
+            "restaurants": {"provider": dining.get("source", "Voyage Demo Provider"), "is_live": dining.get("is_live", False)},
+            "hotels": {"provider": hotel_src, "is_live": hotel_live},
+            "activities": {"provider": activities.get("source", "Voyage Demo Provider"), "is_live": activities.get("is_live", False)},
+            "transport": {"provider": transport.get("source", "Voyage Demo Provider"), "is_live": False},
+            "any_live": travel_live or hotel_live or dining.get("is_live", False) or activities.get("is_live", False)
+        })
+
+        data_source_notice = "Live availability from external travel provider" if prov_sum.get("any_live") else "Prices shown from simulated external travel providers"
+
         return AgentRunResponse(
             thread_id=thread_id,
             status="completed" if not final_state.get("is_budget_exceeded") else "budget_warning",
             destination=final_state.get("destination", "Goa"),
             duration_days=final_state.get("duration", 4),
-            budget=budget,
+            budget=budget_val,
             currency=final_state.get("currency", "INR"),
             estimated_total=total_est,
             remaining_budget=remaining,
@@ -111,11 +133,12 @@ async def run_agent(request: AgentRunRequest):
             itinerary=final_state.get("itinerary", []),
             agent_events=events,
             step_progress=steps,
+            provider_summary=prov_sum,
             requires_approval=final_state.get("requires_approval", False),
             approval_request=approval_req,
             is_budget_exceeded=final_state.get("is_budget_exceeded", False),
             compromise_message=final_state.get("compromise_message"),
-            data_source_notice="Prices shown from simulated external travel providers",
+            data_source_notice=data_source_notice,
             optimization_attempts=final_state.get("optimization_attempts", 0),
             ai_mode=final_state.get("ai_mode", "demo"),
             error=final_state.get("error")
@@ -159,12 +182,14 @@ async def resume_agent(thread_id: str, approval: ResumeApprovalRequest):
 
 @router.get("/health")
 async def agent_health():
-    """Health check returning mode (Gemini LLM or Demo)"""
+    """Health check returning mode, engine, and travel API mode"""
     has_key = is_llm_enabled()
+    travel_mode = os.getenv("TRAVEL_API_MODE", "demo")
     return {
         "status": "healthy",
         "service": "Voyage LangGraph Agent Backend",
         "engine": "LangGraph + Google Gemini",
         "mode": "llm" if has_key else "demo",
+        "travel_api_mode": travel_mode,
         "model": os.getenv("MODEL_NAME", "gemini-2.5-flash" if has_key else "deterministic-rules")
     }

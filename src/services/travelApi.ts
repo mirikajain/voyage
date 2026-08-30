@@ -2,7 +2,7 @@
  * Simulated External Travel API Service Layer
  * 
  * In production, these methods will integrate with live partner inventory:
- * - Amadeus / Sabre / Skyscanner for Flights
+ * - Aviationstack for Flights
  * - Booking.com / Hotelbeds for Accommodations
  * - OpenTable / Resy for Dining
  * - Viator / GetYourGuide for Curated Activities

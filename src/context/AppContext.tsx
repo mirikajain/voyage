@@ -153,6 +153,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })),
     }));
 
+    const reqBudget = data.breakdown.requested_budget !== undefined && data.breakdown.requested_budget !== null
+      ? data.breakdown.requested_budget
+      : (data.budget || data.breakdown.total_estimated_cost);
+
     return {
       id: `rec-${data.thread_id || Date.now()}`,
       planTitle: `YOUR ${data.destination.toUpperCase()} PLAN`,
@@ -166,8 +170,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transportCost: data.breakdown.transport_cost,
         travelCost: data.breakdown.travel_cost,
         totalEstimatedCost: data.breakdown.total_estimated_cost,
-        requestedBudget: data.breakdown.requested_budget,
+        requestedBudget: reqBudget,
         remainingBuffer: data.breakdown.remaining_buffer,
+        hotelSource: data.breakdown.hotel_source,
+        hotelIsLive: data.breakdown.hotel_is_live,
+        travelSource: data.breakdown.travel_source,
+        travelIsLive: data.breakdown.travel_is_live,
       },
       reasons: data.reasons,
       itinerary: formattedItinerary,
@@ -175,6 +183,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       compromiseMessage: data.compromise_message,
       dataSourceNotice: data.data_source_notice || 'Prices shown from simulated external travel providers',
       aiMode: data.ai_mode || 'demo',
+      providerSummary: data.provider_summary,
     };
   };
 
@@ -190,10 +199,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     // 2. Append agent thinking acknowledgment
+    const budgetMsg = budget ? ` around your ₹${budget.toLocaleString()} budget` : '';
     const agentAckMsg: ChatMessage = {
       id: `msg-agent-ack-${Date.now()}`,
       sender: 'agent',
-      text: `I'll build a ${durationDays}-day ${destination} itinerary around your ₹${budget.toLocaleString()} budget. I'll check accommodation, activities, dining and transport while keeping the trip balanced.`,
+      text: `I'll build a ${durationDays}-day ${destination} itinerary${budgetMsg}. I'll check accommodation, activities, dining and transport while keeping the trip balanced.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -213,13 +223,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       stepTemplates[0] = { ...stepTemplates[0], status: 'complete' };
 
       // Step 2 presentation
-      stepTemplates[1] = { ...stepTemplates[1], status: 'active', activeDescription: 'Loading travel & dining preferences...' };
+      stepTemplates[1] = { ...stepTemplates[1], status: 'active', activeDescription: `Loading preferences for ${destination}...` };
       setWorkflowSteps([...stepTemplates]);
       await sleep(300);
       stepTemplates[1] = { ...stepTemplates[1], status: 'complete' };
 
       // Step 3 presentation (Calling LangGraph backend)
-      stepTemplates[2] = { ...stepTemplates[2], status: 'active', activeDescription: 'Querying LangGraph agent backend & partner GDS...' };
+      stepTemplates[2] = { ...stepTemplates[2], status: 'active', activeDescription: `Querying external travel providers & partner GDS for ${destination}...` };
       setWorkflowSteps([...stepTemplates]);
 
       // Real Call to FastAPI + LangGraph Agent Backend
@@ -264,18 +274,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAgentRunning(false);
 
       // Append final agent recommendation message
+      const finalMsgText = clientRec.isBudgetExceeded && clientRec.compromiseMessage
+        ? clientRec.compromiseMessage
+        : (backendResponse.budget
+            ? `Here is your curated ${clientRec.durationDays}-day ${clientRec.destination} plan. Total estimated cost is ₹${clientRec.breakdown.totalEstimatedCost.toLocaleString()} with ₹${clientRec.breakdown.remainingBuffer.toLocaleString()} remaining in your buffer.`
+            : `Here is your curated ${clientRec.durationDays}-day ${clientRec.destination} plan. Total estimated cost is ₹${clientRec.breakdown.totalEstimatedCost.toLocaleString()}.`);
+
       const finalAgentMsg: ChatMessage = {
         id: `msg-agent-rec-${Date.now()}`,
         sender: 'agent',
-        text: clientRec.isBudgetExceeded && clientRec.compromiseMessage
-          ? clientRec.compromiseMessage
-          : `Here is your curated ${clientRec.durationDays}-day ${clientRec.destination} plan from LangGraph. Total estimated cost is ₹${clientRec.breakdown.totalEstimatedCost.toLocaleString()} with ₹${clientRec.breakdown.remainingBuffer.toLocaleString()} remaining in your buffer.`,
+        text: finalMsgText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         recommendation: clientRec,
         isBudgetWarning: clientRec.isBudgetExceeded,
         quickPrompts: clientRec.isBudgetExceeded 
-          ? ['Adjust budget to ₹40,000', 'Reduce activity count', 'Show hostel & homestay options']
-          : ['Review full itinerary', 'Show dining reservation options', 'Lock in EV airport transfer'],
+          ? [`Adjust budget for ${clientRec.destination}`, 'Reduce activity count', 'Show value stay options']
+          : ['Review full itinerary', 'Show dining reservation options', 'Lock in airport transfer'],
       };
       setChatMessages(prev => [...prev, finalAgentMsg]);
     } catch (err: any) {
@@ -308,7 +322,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     runAgentPlanning(`Plan a ${days}-day ${dest} trip under ₹${newBudget.toLocaleString()}`);
   };
 
-  // Initialize with standard Goa trip on first load
+  // Initialize with standard example on first load
   useEffect(() => {
     if (!isInitialized.current) {
       isInitialized.current = true;

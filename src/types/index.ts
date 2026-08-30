@@ -14,6 +14,10 @@ export interface TripCostBreakdown {
   totalEstimatedCost: number;
   requestedBudget: number;
   remainingBuffer: number;
+  hotelSource?: string;
+  hotelIsLive?: boolean;
+  travelSource?: string;
+  travelIsLive?: boolean;
 }
 
 export interface ItineraryItem {
@@ -42,6 +46,7 @@ export interface AgentRecommendationResult {
   compromiseMessage?: string;
   dataSourceNotice: string;
   aiMode?: 'llm' | 'demo' | 'fallback';
+  providerSummary?: Record<string, any>;
 }
 
 export interface AgentWorkflowStep {

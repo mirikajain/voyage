@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, CheckCircle2, ArrowRight, Hotel, Utensils, Compass, Car, Plane, SlidersHorizontal } from 'lucide-react';
+import { Sparkles, CheckCircle2, ArrowRight, Hotel, Utensils, Compass, Car, Plane, SlidersHorizontal, Radio } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const RecommendationView: React.FC = () => {
@@ -13,7 +13,7 @@ export const RecommendationView: React.FC = () => {
         </div>
         <div>
           <h4 className="font-serif-luxury text-xl font-bold text-voyage-dark">Synthesizing Your Trip Plan</h4>
-          <p className="text-xs text-voyage-muted mt-1">Comparing live inventory across simulated external travel services...</p>
+          <p className="text-xs text-voyage-muted mt-1">Comparing live inventory across external travel services & partner networks...</p>
         </div>
       </div>
     );
@@ -21,7 +21,9 @@ export const RecommendationView: React.FC = () => {
 
   if (!activeRecommendationResult) return null;
 
-  const { planTitle, durationDays, breakdown, reasons, isBudgetExceeded, dataSourceNotice } = activeRecommendationResult;
+  const { planTitle, destination, durationDays, breakdown, reasons, isBudgetExceeded, dataSourceNotice, providerSummary } = activeRecommendationResult;
+  const nights = Math.max(1, durationDays - 1);
+  const hasUserBudget = breakdown.requestedBudget && breakdown.requestedBudget !== breakdown.totalEstimatedCost;
 
   return (
     <div className="bg-white rounded-3xl border border-voyage-gold/40 shadow-soft-md overflow-hidden space-y-6 p-6 sm:p-7 relative group">
@@ -32,7 +34,13 @@ export const RecommendationView: React.FC = () => {
             <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-0.5 rounded-full bg-voyage-dark text-voyage-gold">
               AI Curated Plan
             </span>
-            <span className="text-xs text-voyage-muted font-medium">• {durationDays} Days</span>
+            <span className="text-xs text-voyage-muted font-medium">• {durationDays} Days ({destination})</span>
+            {providerSummary?.any_live && (
+              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Radio className="w-3 h-3 text-emerald-600 animate-pulse" />
+                Live Rates
+              </span>
+            )}
           </div>
           <h3 className="font-serif-luxury text-2xl sm:text-3xl font-bold tracking-wide text-voyage-dark">
             {planTitle}
@@ -52,12 +60,15 @@ export const RecommendationView: React.FC = () => {
       <div className="p-4 rounded-2xl bg-voyage-bg border border-voyage-border space-y-2">
         <div className="flex items-center justify-between text-xs">
           <span className="text-voyage-slate font-medium">
-            Budget Ceiling: <span className="font-bold text-voyage-dark">₹{breakdown.requestedBudget.toLocaleString()}</span>
+            {hasUserBudget ? 'Budget Ceiling: ' : 'Estimated Package Envelope: '}
+            <span className="font-bold text-voyage-dark">
+              ₹{(breakdown.requestedBudget || breakdown.totalEstimatedCost).toLocaleString()}
+            </span>
           </span>
           <span className={isBudgetExceeded ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold'}>
             {isBudgetExceeded 
-              ? `₹${(breakdown.totalEstimatedCost - breakdown.requestedBudget).toLocaleString()} over budget`
-              : `Remaining Buffer: ₹${breakdown.remainingBuffer.toLocaleString()}`
+              ? `₹${(breakdown.totalEstimatedCost - (breakdown.requestedBudget || 0)).toLocaleString()} over budget`
+              : (hasUserBudget ? `Remaining Buffer: ₹${breakdown.remainingBuffer.toLocaleString()}` : 'Optimal Budget Fit')
             }
           </span>
         </div>
@@ -70,16 +81,21 @@ export const RecommendationView: React.FC = () => {
                 ? 'bg-rose-500' 
                 : 'bg-gradient-to-r from-voyage-navy via-slate-800 to-voyage-gold'
             }`}
-            style={{ width: `${Math.min(100, Math.round((breakdown.totalEstimatedCost / breakdown.requestedBudget) * 100))}%` }}
+            style={{ width: `${Math.min(100, Math.round((breakdown.totalEstimatedCost / (breakdown.requestedBudget || breakdown.totalEstimatedCost)) * 100))}%` }}
           />
         </div>
       </div>
 
-      {/* Structured Category Cost Breakdown Cards */}
+      {/* Structured Category Cost Breakdown Cards with Live / Demo Badges */}
       <div className="space-y-2.5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-voyage-muted">
-          Estimated Expense Breakdown
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-voyage-muted">
+            Estimated Expense Breakdown
+          </p>
+          <span className="text-[11px] text-voyage-muted">
+            {durationDays} Days / {nights} {nights === 1 ? 'Night' : 'Nights'}
+          </span>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {/* Hotel */}
@@ -89,8 +105,15 @@ export const RecommendationView: React.FC = () => {
                 <Hotel className="w-4 h-4" />
               </div>
               <div>
-                <p className="font-bold text-voyage-dark">Hotel ({breakdown.hotelName})</p>
-                <p className="text-[10px] text-voyage-muted">3 nights oceanfront pavilion</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-voyage-dark">Hotel ({breakdown.hotelName})</p>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                    breakdown.hotelIsLive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {breakdown.hotelIsLive ? `Live · ${breakdown.hotelSource}` : 'Demo data'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-voyage-muted">{nights} {nights === 1 ? 'night' : 'nights'} curated accommodation</p>
               </div>
             </div>
             <span className="font-bold text-voyage-dark">₹{breakdown.hotelCost.toLocaleString()}</span>
@@ -103,8 +126,15 @@ export const RecommendationView: React.FC = () => {
                 <Utensils className="w-4 h-4" />
               </div>
               <div>
-                <p className="font-bold text-voyage-dark">Dining & Tastings</p>
-                <p className="text-[10px] text-voyage-muted">Chef dinners & coastal cafés</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-voyage-dark">Dining & Tastings</p>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                    providerSummary?.restaurants?.is_live ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {providerSummary?.restaurants?.is_live ? `Live · ${providerSummary?.restaurants?.provider}` : 'Demo data'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-voyage-muted">Chef dinners & local dining</p>
               </div>
             </div>
             <span className="font-bold text-voyage-dark">₹{breakdown.diningCost.toLocaleString()}</span>
@@ -117,8 +147,15 @@ export const RecommendationView: React.FC = () => {
                 <Compass className="w-4 h-4" />
               </div>
               <div>
-                <p className="font-bold text-voyage-dark">Activities & Yachting</p>
-                <p className="text-[10px] text-voyage-muted">Sunset cruise, heritage tours</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-voyage-dark">Activities & Culture</p>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                    providerSummary?.activities?.is_live ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {providerSummary?.activities?.is_live ? `Live · ${providerSummary?.activities?.provider}` : 'Demo data'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-voyage-muted">Guided highlights & excursions</p>
               </div>
             </div>
             <span className="font-bold text-voyage-dark">₹{breakdown.activitiesCost.toLocaleString()}</span>
@@ -131,8 +168,13 @@ export const RecommendationView: React.FC = () => {
                 <Car className="w-4 h-4" />
               </div>
               <div>
-                <p className="font-bold text-voyage-dark">Local Transport</p>
-                <p className="text-[10px] text-voyage-muted">Executive EV transfers & cabs</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-voyage-dark">Local Transport</p>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                    Demo data
+                  </span>
+                </div>
+                <p className="text-[10px] text-voyage-muted">Executive transfers & transit pass</p>
               </div>
             </div>
             <span className="font-bold text-voyage-dark">₹{breakdown.transportCost.toLocaleString()}</span>
@@ -145,8 +187,15 @@ export const RecommendationView: React.FC = () => {
                 <Plane className="w-4 h-4" />
               </div>
               <div>
-                <p className="font-bold text-voyage-dark">Travel / Flights</p>
-                <p className="text-[10px] text-voyage-muted">Direct return flights (IndiGo / Vistara Premier)</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-voyage-dark">Travel / Flights</p>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                    breakdown.travelIsLive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {breakdown.travelIsLive ? `Live · ${breakdown.travelSource}` : 'Demo data'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-voyage-muted">Direct return flights ({destination})</p>
               </div>
             </div>
             <span className="font-bold text-voyage-dark">₹{breakdown.travelCost.toLocaleString()}</span>

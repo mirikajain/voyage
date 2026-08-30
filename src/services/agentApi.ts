@@ -1,6 +1,6 @@
 /**
  * Voyage AI Agent Backend API Client
- * Connects the React Frontend to the Python FastAPI + LangGraph Agent Backend (Powered by Google Gemini)
+ * Connects the React Frontend to the Python FastAPI + LangGraph Agent Backend (Real Travel APIs + Gemini)
  */
 
 export interface BackendStepProgress {
@@ -26,8 +26,12 @@ export interface BackendCostBreakdown {
   transport_cost: number;
   travel_cost: number;
   total_estimated_cost: number;
-  requested_budget: number;
+  requested_budget?: number | null;
   remaining_buffer: number;
+  hotel_source?: string;
+  hotel_is_live?: boolean;
+  travel_source?: string;
+  travel_is_live?: boolean;
 }
 
 export interface BackendItineraryItem {
@@ -59,7 +63,7 @@ export interface BackendAgentResponse {
   status: 'completed' | 'budget_warning' | 'in_progress' | 'error';
   destination: string;
   duration_days: number;
-  budget: number;
+  budget?: number | null;
   currency: string;
   estimated_total: number;
   remaining_budget: number;
@@ -68,6 +72,7 @@ export interface BackendAgentResponse {
   itinerary: BackendItineraryDay[];
   agent_events: BackendAgentEvent[];
   step_progress: BackendStepProgress[];
+  provider_summary?: Record<string, any>;
   requires_approval: boolean;
   approval_request?: BackendApprovalRequest | null;
   is_budget_exceeded: boolean;
