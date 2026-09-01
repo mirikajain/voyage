@@ -82,5 +82,26 @@ class AgentState(TypedDict, total=False):
     is_budget_exceeded: bool
     compromise_message: Optional[str]
 
+    # Proactive Travel Disruption State
+    disruption_detected: Optional[bool]
+    disruption_type: Optional[str]
+    disruption_event: Optional[Dict[str, Any]]
+    disruption_reason: Optional[str]
+    disruption_timestamp: Optional[str]
+    affected_item_id: Optional[str]
+    affected_item: Optional[Dict[str, Any]]
+    affected_downstream_items: Optional[List[Dict[str, Any]]]
+    replacement_options: Optional[List[Dict[str, Any]]]
+    selected_replacement: Optional[Dict[str, Any]]
+    itinerary_changes: Optional[List[Dict[str, Any]]]
+    additional_cost: Optional[float]
+    original_item_cost: Optional[float]
+    replacement_cost: Optional[float]
+    budget_impact: Optional[Dict[str, Any]]
+    recovery_status: Optional[str]  # "detected" | "analyzing_impact" | "searching_alternatives" | "budget_evaluated" | "ready_for_review" | "approved" | "rejected" | "unresolved"
+    user_notified: Optional[bool]
+    recovery_recommendation: Optional[Dict[str, Any]]
+    is_simulation: Optional[bool]
+
     ai_mode: str  # "llm" | "demo" | "fallback"
     error: Optional[str]

@@ -114,6 +114,38 @@ export interface BackendSpendGuardrailResult {
   ask_before_purchase: boolean;
 }
 
+export interface BackendDisruptionItemChange {
+  item_id?: string;
+  day?: number;
+  action: 'replaced' | 'rescheduled' | 'cancelled';
+  original_title?: string;
+  new_title?: string;
+  original_cost?: number;
+  new_cost?: number;
+  original_time?: string;
+  new_time?: string;
+  description?: string;
+}
+
+export interface BackendDisruptionRecovery {
+  disruption_detected: boolean;
+  disruption_type: string;
+  disruption_reason: string;
+  disruption_timestamp: string;
+  is_simulation: boolean;
+  affected_item?: any;
+  affected_downstream_items?: any[];
+  selected_replacement?: any;
+  replacement_options?: any[];
+  itinerary_changes?: BackendDisruptionItemChange[];
+  additional_cost: number;
+  original_item_cost: number;
+  replacement_cost: number;
+  price_difference: number;
+  recovery_status: 'ready_for_review' | 'approved' | 'rejected' | 'unresolved';
+  requires_approval: boolean;
+}
+
 export interface BackendAgentResponse {
   thread_id: string;
   status: 'completed' | 'needs_input' | 'budget_warning' | 'awaiting_approval' | 'in_progress' | 'error';
@@ -153,6 +185,9 @@ export interface BackendAgentResponse {
   payment_order?: BackendRazorpayOrder | null;
   payment_confirmation?: BackendPaymentConfirmation | null;
   spend_guardrail_result?: BackendSpendGuardrailResult | null;
+
+  // Proactive Travel Disruption Layer
+  disruption_recovery?: BackendDisruptionRecovery | null;
   
   is_budget_exceeded: boolean;
   compromise_message?: string;
@@ -334,6 +369,55 @@ export async function confirmPayment(
   if (!response.ok) {
     const errText = await response.text();
     throw new Error(`Failed to confirm payment (${response.status}): ${errText}`);
+  }
+
+  return response.json();
+}
+
+export async function simulateDisruption(
+  threadId: string,
+  payload: {
+    type: string;
+    item_id?: string;
+    reason?: string;
+    delay_minutes?: number;
+    is_simulation?: boolean;
+  }
+): Promise<BackendAgentResponse> {
+  const response = await fetch(`${API_BASE_URL}/${threadId}/simulate-disruption`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to simulate disruption (${response.status}): ${errText}`);
+  }
+
+  return response.json();
+}
+
+export async function resolveDisruption(
+  threadId: string,
+  payload: {
+    approved: boolean;
+    selected_replacement_id?: string;
+  }
+): Promise<BackendAgentResponse> {
+  const response = await fetch(`${API_BASE_URL}/${threadId}/resolve-disruption`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to resolve disruption (${response.status}): ${errText}`);
   }
 
   return response.json();

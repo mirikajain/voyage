@@ -119,6 +119,38 @@ export interface ApprovalRequestData {
   gateway?: string;
 }
 
+export interface DisruptionItemChange {
+  item_id?: string;
+  day?: number;
+  action: 'replaced' | 'rescheduled' | 'cancelled';
+  original_title?: string;
+  new_title?: string;
+  original_cost?: number;
+  new_cost?: number;
+  original_time?: string;
+  new_time?: string;
+  description?: string;
+}
+
+export interface DisruptionRecoveryData {
+  disruption_detected: boolean;
+  disruption_type: string;
+  disruption_reason: string;
+  disruption_timestamp: string;
+  is_simulation: boolean;
+  affected_item?: any;
+  affected_downstream_items?: any[];
+  selected_replacement?: any;
+  replacement_options?: any[];
+  itinerary_changes?: DisruptionItemChange[];
+  additional_cost: number;
+  original_item_cost: number;
+  replacement_cost: number;
+  price_difference: number;
+  recovery_status: 'ready_for_review' | 'approved' | 'rejected' | 'unresolved';
+  requires_approval: boolean;
+}
+
 export interface AgentRecommendationResult {
   id: string;
   thread_id?: string;
@@ -149,6 +181,9 @@ export interface AgentRecommendationResult {
   paymentConfirmation?: PaymentConfirmationData;
   spendGuardrailResult?: SpendGuardrailResult;
 
+  // Proactive Travel Disruption Layer
+  disruptionRecovery?: DisruptionRecoveryData;
+
   isBudgetExceeded: boolean;
   compromiseMessage?: string;
   dataSourceNotice: string;
@@ -169,7 +204,7 @@ export interface AgentActivityLogItem {
   id: string;
   timestamp: string;
   event: string;
-  category?: 'system' | 'tool' | 'budget' | 'complete';
+  category?: 'system' | 'tool' | 'budget' | 'complete' | 'disruption';
 }
 
 export interface Trip {

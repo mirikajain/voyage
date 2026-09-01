@@ -97,6 +97,47 @@ class SearchResultsSchema(BaseModel):
     provider: str
     is_live: bool
 
+class SimulateDisruptionRequest(BaseModel):
+    type: str = Field("flight_cancelled", description="Disruption type: 'flight_cancelled', 'flight_delayed', 'hotel_cancelled', 'activity_cancelled', 'transport_cancelled'")
+    item_id: Optional[str] = Field(None, description="Optional specific itinerary item ID to disrupt")
+    reason: Optional[str] = Field(None, description="Custom reason for disruption")
+    delay_minutes: Optional[int] = Field(180, description="Delay duration in minutes if flight_delayed")
+    is_simulation: bool = Field(True, description="Always marked true for simulated events")
+
+class ResolveDisruptionRequest(BaseModel):
+    approved: bool = Field(True, description="Whether user approved or rejected the recovery plan")
+    selected_replacement_id: Optional[str] = Field(None, description="Optional alternative replacement selected by user")
+
+class DisruptionItemChangeSchema(BaseModel):
+    item_id: Optional[str] = None
+    day: Optional[int] = None
+    action: str  # "replaced" | "rescheduled" | "cancelled"
+    original_title: Optional[str] = None
+    new_title: Optional[str] = None
+    original_cost: Optional[float] = None
+    new_cost: Optional[float] = None
+    original_time: Optional[str] = None
+    new_time: Optional[str] = None
+    description: Optional[str] = None
+
+class DisruptionRecoverySchema(BaseModel):
+    disruption_detected: bool = True
+    disruption_type: str
+    disruption_reason: str
+    disruption_timestamp: str
+    is_simulation: bool = True
+    affected_item: Optional[Dict[str, Any]] = None
+    affected_downstream_items: List[Dict[str, Any]] = Field(default_factory=list)
+    selected_replacement: Optional[Dict[str, Any]] = None
+    replacement_options: List[Dict[str, Any]] = Field(default_factory=list)
+    itinerary_changes: List[DisruptionItemChangeSchema] = Field(default_factory=list)
+    additional_cost: float = 0.0
+    original_item_cost: float = 0.0
+    replacement_cost: float = 0.0
+    price_difference: float = 0.0
+    recovery_status: str = "ready_for_review"  # "ready_for_review" | "approved" | "rejected" | "unresolved"
+    requires_approval: bool = True
+
 class AgentRunResponse(BaseModel):
     thread_id: str
     status: str  # "completed" | "needs_input" | "budget_warning" | "awaiting_approval" | "in_progress" | "error"
@@ -139,6 +180,9 @@ class AgentRunResponse(BaseModel):
     razorpay_order_id: Optional[str] = None
     razorpay_payment_id: Optional[str] = None
     spend_guardrail_result: Optional[SpendGuardrailResult] = None
+
+    # Proactive Travel Disruption Layer
+    disruption_recovery: Optional[DisruptionRecoverySchema] = None
     
     is_budget_exceeded: bool = False
     compromise_message: Optional[str] = None

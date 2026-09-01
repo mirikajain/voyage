@@ -25,6 +25,8 @@ import {
   runAgent, 
   resumeAgentApproval, 
   confirmPayment, 
+  simulateDisruption,
+  resolveDisruption,
   type BackendAgentResponse 
 } from '../services/agentApi';
 
@@ -86,6 +88,8 @@ interface AppContextType {
     currency?: string;
     status?: string;
   }) => Promise<void>;
+  handleSimulateDisruption: (type: string, itemId?: string, reason?: string) => Promise<void>;
+  handleResolveDisruption: (approved: boolean, selectedReplacementId?: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -293,6 +297,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         is_budget_exceeded: data.spend_guardrail_result.is_budget_exceeded,
         autonomous_limit: data.spend_guardrail_result.autonomous_limit,
         ask_before_purchase: data.spend_guardrail_result.ask_before_purchase,
+      } : undefined,
+
+      // Proactive Travel Disruption Mapping
+      disruptionRecovery: data.disruption_recovery ? {
+        disruption_detected: data.disruption_recovery.disruption_detected,
+        disruption_type: data.disruption_recovery.disruption_type,
+        disruption_reason: data.disruption_recovery.disruption_reason,
+        disruption_timestamp: data.disruption_recovery.disruption_timestamp,
+        is_simulation: data.disruption_recovery.is_simulation,
+        affected_item: data.disruption_recovery.affected_item,
+        affected_downstream_items: data.disruption_recovery.affected_downstream_items,
+        selected_replacement: data.disruption_recovery.selected_replacement,
+        replacement_options: data.disruption_recovery.replacement_options,
+        itinerary_changes: data.disruption_recovery.itinerary_changes ? data.disruption_recovery.itinerary_changes.map(c => ({
+          item_id: c.item_id,
+          day: c.day,
+          action: c.action,
+          original_title: c.original_title,
+          new_title: c.new_title,
+          original_cost: c.original_cost,
+          new_cost: c.new_cost,
+          original_time: c.original_time,
+          new_time: c.new_time,
+          description: c.description,
+        })) : [],
+        additional_cost: data.disruption_recovery.additional_cost,
+        original_item_cost: data.disruption_recovery.original_item_cost,
+        replacement_cost: data.disruption_recovery.replacement_cost,
+        price_difference: data.disruption_recovery.price_difference,
+        recovery_status: data.disruption_recovery.recovery_status,
+        requires_approval: data.disruption_recovery.requires_approval,
       } : undefined,
 
       isBudgetExceeded: data.is_budget_exceeded,
@@ -709,6 +744,115 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     runAgentPlanning(promptText);
   };
 
+  const handleSimulateDisruption = async (type: string, itemId?: string, reason?: string) => {
+    if (isAgentRunning) return;
+    setIsAgentRunning(true);
+    const threadId = currentThreadId || `thread_${Date.now()}`;
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setActivityLogs(prev => [
+      {
+        id: `log-disp-${Date.now()}`,
+        timestamp: now,
+        event: `⚠️ Disruption simulated: ${type.replace(/_/g, ' ')}`,
+        category: 'system',
+      },
+      ...prev,
+    ]);
+
+    try {
+      const response = await simulateDisruption(threadId, {
+        type,
+        item_id: itemId,
+        reason,
+        is_simulation: true,
+      });
+
+      if (response.step_progress && response.step_progress.length > 0) {
+        setWorkflowSteps(response.step_progress.map(s => ({
+          id: s.id,
+          label: s.label,
+          status: s.status,
+          activeDescription: s.active_description,
+          completedDescription: s.completed_description,
+        })));
+      }
+
+      if (response.agent_events && response.agent_events.length > 0) {
+        setActivityLogs(response.agent_events.map(e => ({
+          id: e.id,
+          timestamp: e.timestamp,
+          event: e.event,
+          category: e.category,
+        })));
+      }
+
+      const result = mapBackendResponseToClient(response);
+      setActiveRecommendationResult(result);
+
+      if (response.reasons && response.reasons.length > 0) {
+        const agentMsg: ChatMessage = {
+          id: `msg-disp-${Date.now()}`,
+          sender: 'agent',
+          text: response.reasons[0],
+          timestamp: now,
+        };
+        setChatMessages(prev => [...prev, agentMsg]);
+      }
+    } catch (err: any) {
+      console.error('Disruption simulation error:', err);
+      const errMsg: ChatMessage = {
+        id: `msg-err-${Date.now()}`,
+        sender: 'agent',
+        text: `Error during disruption simulation: ${err.message}`,
+        timestamp: now,
+      };
+      setChatMessages(prev => [...prev, errMsg]);
+    } finally {
+      setIsAgentRunning(false);
+    }
+  };
+
+  const handleResolveDisruption = async (approved: boolean, selectedReplacementId?: string) => {
+    if (isAgentRunning) return;
+    setIsAgentRunning(true);
+    const threadId = currentThreadId || `thread_${Date.now()}`;
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    try {
+      const response = await resolveDisruption(threadId, {
+        approved,
+        selected_replacement_id: selectedReplacementId,
+      });
+
+      if (response.agent_events && response.agent_events.length > 0) {
+        setActivityLogs(response.agent_events.map(e => ({
+          id: e.id,
+          timestamp: e.timestamp,
+          event: e.event,
+          category: e.category,
+        })));
+      }
+
+      const result = mapBackendResponseToClient(response);
+      setActiveRecommendationResult(result);
+
+      const resMsg: ChatMessage = {
+        id: `msg-res-${Date.now()}`,
+        sender: 'agent',
+        text: approved
+          ? `✅ Disruption recovery approved! Your revised itinerary has been updated and bookings confirmed.`
+          : `❌ Disruption recovery declined. Original disrupted service remains flagged as unresolved.`,
+        timestamp: now,
+      };
+      setChatMessages(prev => [...prev, resMsg]);
+    } catch (err: any) {
+      console.error('Resolve disruption error:', err);
+    } finally {
+      setIsAgentRunning(false);
+    }
+  };
+
   const handleAdjustBudgetSubmit = (newBudget: number) => {
     setIsAdjustBudgetModalOpen(false);
     const dest = activeRecommendationResult?.destination || 'Goa';
@@ -765,6 +909,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         handleApprovePayment,
         handleRejectPayment,
         handleConfirmPaymentSuccess,
+        handleSimulateDisruption,
+        handleResolveDisruption,
       }}
     >
       {children}

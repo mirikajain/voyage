@@ -134,6 +134,28 @@ export const RecommendationView: React.FC = () => {
         </div>
       </div>
 
+      {/* Proactive Disruption Recovery Banner */}
+      {activeRecommendationResult.disruptionRecovery?.disruption_detected && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-start gap-3 text-xs text-amber-900 animate-in fade-in duration-300">
+          <div className="p-2 rounded-xl bg-amber-200/70 text-amber-900 flex-shrink-0">
+            <AlertTriangle className="w-4 h-4 text-amber-700" />
+          </div>
+          <div className="space-y-1 flex-1">
+            <div className="flex items-center justify-between">
+              <span className="font-bold uppercase tracking-wider text-[10px] text-amber-950">
+                Active Disruption Recovery Plan
+              </span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900">
+                {activeRecommendationResult.disruptionRecovery.is_simulation ? 'SIMULATION' : 'LIVE'}
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-800 leading-relaxed font-sans">
+              {activeRecommendationResult.disruptionRecovery.disruption_reason}. Schedule adaptations and replacements are ready for review in the Agent Control Center.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Budget Comparison Banner */}
       <div className="p-4 rounded-2xl bg-voyage-bg border border-voyage-border space-y-2">
         <div className="flex items-center justify-between text-xs">

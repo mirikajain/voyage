@@ -6,6 +6,10 @@ from app.models.schemas import (
     AgentRunResponse,
     ResumeApprovalRequest,
     ConfirmPaymentRequest,
+    SimulateDisruptionRequest,
+    ResolveDisruptionRequest,
+    DisruptionRecoverySchema,
+    DisruptionItemChangeSchema,
     CostBreakdownSchema,
     AgentEventSchema,
     StepProgressSchema,
@@ -18,6 +22,7 @@ from app.models.payment_schemas import (
     PaymentConfirmationSchema
 )
 from app.agent.graph import voyage_agent_app
+from app.agent.disruption_graph import voyage_disruption_app
 from app.services.payment_service import PaymentService
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
@@ -98,7 +103,7 @@ def _format_agent_response(thread_id: str, final_state: Dict[str, Any]) -> Agent
             duration_days=ar.get("duration_days", duration),
             selected_hotel=ar.get("selected_hotel", hotel.get("name")),
             selected_flight=ar.get("selected_flight", flight.get("airline")),
-            selected_activities=ar.get("selected_activities", []),
+            selected_activities=[str(a) for a in ar.get("selected_activities", []) if a is not None],
             total_estimated_cost=float(ar.get("total_estimated_cost", estimated_total)),
             amount=float(ar.get("amount", estimated_total)),
             currency=ar.get("currency", "INR"),
@@ -182,6 +187,44 @@ def _format_agent_response(thread_id: str, final_state: Dict[str, Any]) -> Agent
     prov_summary = final_state.get("provider_summary", {})
     notice = "Prices shown with live partner rates & verified inventory" if prov_summary.get("any_live") else "Prices shown from simulated external travel providers"
 
+    # Disruption Recovery Mapping
+    disruption_obj = None
+    if final_state.get("disruption_detected") or final_state.get("recovery_status"):
+        event_dict = final_state.get("disruption_event") or {}
+        changes = [
+            DisruptionItemChangeSchema(
+                item_id=c.get("item_id"),
+                day=c.get("day"),
+                action=c.get("action", "replaced"),
+                original_title=c.get("original_title"),
+                new_title=c.get("new_title"),
+                original_cost=c.get("original_cost"),
+                new_cost=c.get("new_cost"),
+                original_time=c.get("original_time"),
+                new_time=c.get("new_time"),
+                description=c.get("description")
+            )
+            for c in final_state.get("itinerary_changes", [])
+        ]
+        disruption_obj = DisruptionRecoverySchema(
+            disruption_detected=bool(final_state.get("disruption_detected", True)),
+            disruption_type=final_state.get("disruption_type", event_dict.get("event_type", "flight_cancelled")),
+            disruption_reason=final_state.get("disruption_reason", event_dict.get("reason", "Operational disruption")),
+            disruption_timestamp=final_state.get("disruption_timestamp", event_dict.get("timestamp", "")),
+            is_simulation=bool(final_state.get("is_simulation", True)),
+            affected_item=final_state.get("affected_item"),
+            affected_downstream_items=final_state.get("affected_downstream_items", []),
+            selected_replacement=final_state.get("selected_replacement"),
+            replacement_options=final_state.get("replacement_options", []),
+            itinerary_changes=changes,
+            additional_cost=float(final_state.get("additional_cost", 0.0)),
+            original_item_cost=float(final_state.get("original_item_cost", 0.0)),
+            replacement_cost=float(final_state.get("replacement_cost", 0.0)),
+            price_difference=float(final_state.get("budget_impact", {}).get("price_difference", final_state.get("additional_cost", 0.0))),
+            recovery_status=final_state.get("recovery_status", "ready_for_review"),
+            requires_approval=bool(final_state.get("requires_approval", True))
+        )
+
     return AgentRunResponse(
         thread_id=thread_id,
         status=run_status,
@@ -220,6 +263,7 @@ def _format_agent_response(thread_id: str, final_state: Dict[str, Any]) -> Agent
         razorpay_order_id=final_state.get("razorpay_order_id"),
         razorpay_payment_id=final_state.get("razorpay_payment_id"),
         spend_guardrail_result=spend_gr_obj,
+        disruption_recovery=disruption_obj,
         is_budget_exceeded=is_exceeded,
         compromise_message=compromise_msg,
         data_source_notice=notice,
@@ -448,3 +492,86 @@ async def confirm_payment_endpoint(thread_id: str, request: ConfirmPaymentReques
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to confirm payment: {str(e)}")
+
+@router.post("/{thread_id}/simulate-disruption", response_model=AgentRunResponse)
+async def simulate_disruption_endpoint(thread_id: str, request: SimulateDisruptionRequest):
+    """
+    Simulates a live external travel disruption (e.g. flight cancellation/delay, hotel cancellation,
+    activity cancellation) for the given trip thread.
+    Executes the autonomous disruption recovery LangGraph workflow.
+    """
+    config = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        # Fetch current trip state from main graph or memory
+        current_state = voyage_agent_app.get_state(config)
+        state_dict = dict(current_state.values) if current_state and current_state.values else {
+            "thread_id": thread_id,
+            "destination": "Goa",
+            "origin": "Mumbai",
+            "duration": 4,
+            "duration_days": 4,
+            "budget": 40000.0,
+            "estimated_total": 35550.0,
+            "remaining_budget": 4450.0,
+            "itinerary": [],
+            "agent_events": [],
+            "step_progress": []
+        }
+
+        # If itinerary is empty in memory, build basic default itinerary for simulation
+        if not state_dict.get("itinerary"):
+            from app.agent.nodes import build_itinerary_node
+            itin_res = build_itinerary_node(state_dict)
+            state_dict.update(itin_res)
+
+        state_dict["thread_id"] = thread_id
+        state_dict["disruption_event"] = {
+            "type": request.type,
+            "item_id": request.item_id,
+            "reason": request.reason,
+            "delay_minutes": request.delay_minutes,
+            "is_simulation": request.is_simulation
+        }
+
+        # Run Disruption Recovery Graph
+        result = voyage_disruption_app.invoke(state_dict, config=config)
+        
+        # Merge updated recovery state back into main graph checkpointer
+        voyage_agent_app.update_state(config, result)
+
+        return _format_agent_response(thread_id, result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to simulate disruption recovery: {str(e)}")
+
+@router.post("/{thread_id}/resolve-disruption", response_model=AgentRunResponse)
+async def resolve_disruption_endpoint(thread_id: str, request: ResolveDisruptionRequest):
+    """
+    Handles user decision (Approve / Reject) for a proactive disruption recovery recommendation.
+    If approved and additional cost > 0, executes Razorpay booking confirmation.
+    """
+    config = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        current_state = voyage_agent_app.get_state(config)
+        state_dict = dict(current_state.values) if current_state and current_state.values else {}
+        
+        if not state_dict:
+            raise HTTPException(status_code=404, detail="Active trip thread not found")
+
+        state_dict["approval_status"] = "approved" if request.approved else "rejected"
+
+        from app.agent.disruption_graph import apply_disruption_resolution_node
+        resolved = apply_disruption_resolution_node(state_dict)
+        state_dict.update(resolved)
+
+        voyage_agent_app.update_state(config, state_dict)
+        return _format_agent_response(thread_id, state_dict)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to resolve disruption: {str(e)}")
