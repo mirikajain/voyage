@@ -47,7 +47,7 @@ def test_full_budget_api_regression():
     # 1. Plan a 4-day Goa trip under ₹40,000
     print("\n>>> Request 1: Plan a 4-day Goa trip under ₹40,000")
     thread_1 = "test_budget_flow_1"
-    r1 = client.post("/api/agent/run", json={"message": "Plan a 4-day Goa trip under ₹40,000", "thread_id": thread_1})
+    r1 = client.post("/api/agent/run", json={"message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000", "thread_id": thread_1})
     assert r1.status_code == 200, f"Error: {r1.status_code}, {r1.text}"
     d1 = r1.json()
     assert d1["status"] in ["completed", "awaiting_approval"], f"Expected completed/awaiting_approval, got {d1['status']}"
@@ -63,7 +63,7 @@ def test_full_budget_api_regression():
     # 2. Plan a 4-day Goa trip under ₹20,000
     print("\n>>> Request 2: Plan a 4-day Goa trip under ₹20,000 (Budget optimization)")
     thread_2 = "test_budget_flow_2"
-    r2 = client.post("/api/agent/run", json={"message": "Plan a 4-day Goa trip under ₹20,000", "thread_id": thread_2})
+    r2 = client.post("/api/agent/run", json={"message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹20,000", "thread_id": thread_2})
     assert r2.status_code == 200
     d2 = r2.json()
     assert d2["status"] in ["completed", "awaiting_approval"]
@@ -76,7 +76,7 @@ def test_full_budget_api_regression():
     # 3. Plan a 2-day Jaipur trip under ₹20,000
     print("\n>>> Request 3: Plan a 2-day Jaipur trip under ₹20,000")
     thread_3 = "test_budget_flow_3"
-    r3 = client.post("/api/agent/run", json={"message": "Plan a 2-day Jaipur trip under ₹20,000", "thread_id": thread_3})
+    r3 = client.post("/api/agent/run", json={"message": "Plan a 2-day Jaipur trip from Delhi from September 14 to September 16 under ₹20,000", "thread_id": thread_3})
     assert r3.status_code == 200
     d3 = r3.json()
     assert d3["status"] in ["completed", "awaiting_approval"]
@@ -90,7 +90,7 @@ def test_full_budget_api_regression():
     print("\n>>> Request 4: Multi-turn State & Budget Preservation")
     thread_chain = "test_budget_chain_4"
     # Turn 1
-    c1 = client.post("/api/agent/run", json={"message": "Plan a 4-day Goa trip under ₹40,000", "thread_id": thread_chain}).json()
+    c1 = client.post("/api/agent/run", json={"message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000", "thread_id": thread_chain}).json()
     assert c1["budget"] == 40000.0
     assert c1["destination"] == "Goa"
 

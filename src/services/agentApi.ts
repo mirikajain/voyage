@@ -201,7 +201,9 @@ const API_BASE_URL = '/api/agent';
 
 export async function runAgent(
   message: string,
-  threadId?: string
+  threadId?: string,
+  userPreferences?: any,
+  homeAddress?: any
 ): Promise<BackendAgentResponse> {
   const response = await fetch(`${API_BASE_URL}/run`, {
     method: 'POST',
@@ -211,6 +213,8 @@ export async function runAgent(
     body: JSON.stringify({
       message,
       thread_id: threadId,
+      user_preferences: userPreferences,
+      home_address: homeAddress,
     }),
   });
 

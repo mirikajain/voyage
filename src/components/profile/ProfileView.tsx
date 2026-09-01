@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldCheck, Mail, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { TravelPreferences } from './TravelPreferences';
+import { HomeAddressSection } from './HomeAddressSection';
 import { AIPreferences } from './AIPreferences';
 import { PaymentPreferences } from './PaymentPreferences';
 
@@ -50,6 +51,9 @@ export const ProfileView: React.FC = () => {
           <span className="text-[11px] text-voyage-muted block">Requires approval above this threshold</span>
         </div>
       </div>
+
+      {/* Home Address & Default Origin */}
+      <HomeAddressSection />
 
       {/* Travel Preferences */}
       <TravelPreferences />

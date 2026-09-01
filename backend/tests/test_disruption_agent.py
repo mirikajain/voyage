@@ -1,17 +1,21 @@
 import sys
+import os
+
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 import unittest
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.agent.disruption import (
-    DisruptionType,
     DisruptionEvent,
+    DisruptionType,
     normalize_disruption_event,
     parse_time_to_minutes,
     format_minutes_to_time
 )
-from app.agent.disruption_graph import voyage_disruption_app
-from app.agent.graph import voyage_agent_app
 
 client = TestClient(app)
 
@@ -76,7 +80,7 @@ def test_flight_cancellation_disruption_workflow():
 
     # 1. Initialize a 4-day Goa trip
     r1 = client.post("/api/agent/run", json={
-        "message": "Plan a 4-day Goa trip under ₹40,000",
+        "message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000",
         "thread_id": thread_id
     })
     assert r1.status_code == 200
@@ -136,7 +140,7 @@ def test_hotel_cancellation_disruption_workflow():
 
     # 1. Initialize trip
     client.post("/api/agent/run", json={
-        "message": "Plan a 4-day Goa trip under ₹40,000",
+        "message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000",
         "thread_id": thread_id
     })
 
@@ -171,7 +175,7 @@ def test_activity_cancellation_disruption_workflow():
 
     # 1. Initialize trip
     client.post("/api/agent/run", json={
-        "message": "Plan a 4-day Goa trip under ₹40,000",
+        "message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000",
         "thread_id": thread_id
     })
 
@@ -201,7 +205,7 @@ def test_disruption_resolution_approval_flow():
 
     # 1. Initialize trip
     client.post("/api/agent/run", json={
-        "message": "Plan a 4-day Goa trip under ₹40,000",
+        "message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000",
         "thread_id": thread_id
     })
 
@@ -225,7 +229,7 @@ def test_disruption_resolution_approval_flow():
     # 4. Test Rejection flow on separate thread
     thread_id_rej = "test_disruption_reject"
     client.post("/api/agent/run", json={
-        "message": "Plan a 4-day Goa trip under ₹40,000",
+        "message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000",
         "thread_id": thread_id_rej
     })
     client.post(f"/api/agent/{thread_id_rej}/simulate-disruption", json={

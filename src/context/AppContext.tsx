@@ -5,6 +5,7 @@ import type {
   Trip, 
   ExploreItem, 
   UserPreferences, 
+  HomeAddress,
   ChatMessage, 
   AgentWorkflowStep, 
   AgentActivityLogItem,
@@ -90,6 +91,7 @@ interface AppContextType {
   }) => Promise<void>;
   handleSimulateDisruption: (type: string, itemId?: string, reason?: string) => Promise<void>;
   handleResolveDisruption: (approved: boolean, selectedReplacementId?: string) => Promise<void>;
+  updateHomeAddress: (address: HomeAddress | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -103,7 +105,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [exploreItems] = useState<ExploreItem[]>(mockExploreItems);
   const [activeExploreCategory, setActiveExploreCategory] = useState<ExploreCategory>('hotels');
   const [activeEvaluationItem, setActiveEvaluationItem] = useState<ExploreItem | null>(null);
-  const [userProfile, setUserProfile] = useState<UserPreferences>(mockUserProfile);
+  
+  // Persistent Profile initialization from localStorage
+  const [userProfile, setUserProfile] = useState<UserPreferences>(() => {
+    try {
+      const savedProfile = localStorage.getItem('voyage_user_profile');
+      if (savedProfile) {
+        const parsed = JSON.parse(savedProfile);
+        return {
+          ...mockUserProfile,
+          ...parsed,
+        };
+      }
+      const savedHome = localStorage.getItem('voyage_home_address');
+      if (savedHome) {
+        return {
+          ...mockUserProfile,
+          homeAddress: JSON.parse(savedHome),
+        };
+      }
+    } catch (e) {
+      console.error('Error loading saved profile:', e);
+    }
+    return mockUserProfile;
+  });
   
   // Modals
   const [isGlobalAIModalOpen, setIsGlobalAIModalOpen] = useState(false);
@@ -125,13 +150,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isInitialized = useRef(false);
 
   const updateAIPreference = (key: keyof UserPreferences['aiPreferences'], value: boolean) => {
-    setUserProfile(prev => ({
-      ...prev,
-      aiPreferences: {
-        ...prev.aiPreferences,
-        [key]: value,
-      },
-    }));
+    setUserProfile(prev => {
+      const updated = {
+        ...prev,
+        aiPreferences: {
+          ...prev.aiPreferences,
+          [key]: value,
+        },
+      };
+      try {
+        localStorage.setItem('voyage_user_profile', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Error persisting profile to localStorage:', err);
+      }
+      return updated;
+    });
+  };
+
+  const updateHomeAddress = (address: HomeAddress | null) => {
+    setUserProfile(prev => {
+      const updated: UserPreferences = {
+        ...prev,
+        homeAddress: address || undefined,
+      };
+      try {
+        localStorage.setItem('voyage_user_profile', JSON.stringify(updated));
+        if (address) {
+          localStorage.setItem('voyage_home_address', JSON.stringify(address));
+        } else {
+          localStorage.removeItem('voyage_home_address');
+        }
+      } catch (err) {
+        console.error('Failed to save home address to localStorage:', err);
+      }
+      return updated;
+    });
   };
 
   const handleBookRecommendation = (rec?: RecommendationProposal | AgentRecommendationResult) => {
@@ -410,7 +463,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         stepTemplates[0].status = 'complete';
       }
 
-      const backendResponse = await runAgent(promptText, currentThreadId || undefined);
+      const backendResponse = await runAgent(
+        promptText, 
+        currentThreadId || undefined,
+        userProfile,
+        userProfile.homeAddress
+      );
       setCurrentAIMode(backendResponse.ai_mode || 'demo');
       
       // Save thread ID for multi-turn conversational persistence
@@ -911,6 +969,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         handleConfirmPaymentSuccess,
         handleSimulateDisruption,
         handleResolveDisruption,
+        updateHomeAddress,
       }}
     >
       {children}

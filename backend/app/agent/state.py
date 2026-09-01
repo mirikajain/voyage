@@ -29,6 +29,8 @@ class AgentState(TypedDict, total=False):
     travel_style: str
     interests: List[str]
     preferences: Dict[str, Any]
+    home_address: Optional[Dict[str, Any]]
+    home_city: Optional[str]
     
     # Conversational Clarification State
     status: Optional[str]  # "completed" | "needs_input" | "budget_warning" | "awaiting_approval"

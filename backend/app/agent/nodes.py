@@ -97,6 +97,8 @@ def parse_request_node(state: AgentState) -> Dict[str, Any]:
         if parsed["destination"].strip().lower() != old_dest.strip().lower() and ("plan" in prompt.lower() or "trip to" in prompt.lower()):
             is_explicit_new_destination = True
 
+    has_existing_completed_trip = bool(state.get("itinerary") and state.get("estimated_total"))
+
     # INTENT RESOLUTION:
     # 1. Dedicated Search intents (hotel_search, flight_search, restaurant_search, activity_search, transport_search) ALWAYS stay search intents!
     if raw_intent in ["hotel_search", "flight_search", "restaurant_search", "activity_search", "transport_search"]:
@@ -104,29 +106,55 @@ def parse_request_node(state: AgentState) -> Dict[str, Any]:
     # 2. Budget adjustments
     elif raw_intent == "budget_adjustment":
         intent = "budget_adjustment"
-    # 3. Follow-up modification
+    # 3. Follow-up modification (only if a completed trip exists; otherwise continue clarification for trip planning)
     elif raw_intent == "follow_up":
-        intent = "follow_up"
+        if has_existing_completed_trip:
+            intent = "follow_up"
+        else:
+            intent = "trip_planning"
     # 4. Trip planning
     elif raw_intent == "trip_planning":
-        if has_existing_trip and not is_explicit_new_destination and (not parsed.get("destination") or parsed.get("destination").lower() == (old_dest or "").lower()) and not ("plan" in prompt.lower() or "trip" in prompt.lower() or "new" in prompt.lower()):
+        if has_existing_completed_trip and not is_explicit_new_destination and (not parsed.get("destination") or parsed.get("destination").lower() == (old_dest or "").lower()) and not ("plan" in prompt.lower() or "trip" in prompt.lower() or "new" in prompt.lower()):
             intent = "follow_up"
         else:
             intent = "trip_planning"
     else:
         intent = raw_intent
 
-    # Entity merging across turns
-    dest = parsed.get("destination") or (old_dest if not is_explicit_new_destination else None)
-    orig = parsed.get("origin") or (old_orig if not is_explicit_new_destination else None)
-    
-    if parsed.get("duration_days") and int(parsed["duration_days"]) > 0:
-        duration = int(parsed["duration_days"])
-    elif not is_explicit_new_destination and old_duration:
-        duration = int(old_duration)
-    else:
-        duration = None
+    # 1. Resolve Home Address / Home City from State/Preferences
+    home_addr = state.get("home_address") or (state.get("preferences") or {}).get("home_address") or (state.get("preferences") or {}).get("homeAddress")
+    home_city = None
+    if isinstance(home_addr, dict):
+        home_city = home_addr.get("city")
+    elif isinstance(home_addr, str):
+        home_city = home_addr
+    if not home_city:
+        home_city = state.get("home_city") or (state.get("preferences") or {}).get("home_city") or (state.get("preferences") or {}).get("homeCity")
 
+    if home_city and isinstance(home_city, str):
+        home_city = home_city.strip()
+
+    # 2. Entity merging across turns
+    dest = parsed.get("destination") or (old_dest if not is_explicit_new_destination else None)
+    
+    # Origin resolution priority:
+    # 1. Explicit origin in current user message
+    # 2. Existing origin in thread state
+    # 3. Saved Home city from Profile
+    # 4. None
+    if parsed.get("origin"):
+        orig = parsed["origin"]
+    elif not is_explicit_new_destination and old_orig:
+        orig = old_orig
+    elif home_city:
+        orig = home_city
+    else:
+        orig = None
+
+    # Date resolution priority:
+    # 1. Dates in current user message
+    # 2. Existing dates in thread state
+    # 3. None (Do NOT invent dates!)
     if parsed.get("departure_date"):
         dep_date = parsed["departure_date"]
         ret_date = parsed.get("return_date")
@@ -136,6 +164,26 @@ def parse_request_node(state: AgentState) -> Dict[str, Any]:
     else:
         dep_date = None
         ret_date = None
+    
+    duration = None
+    if parsed.get("duration_days") and int(parsed["duration_days"]) > 0:
+        duration = int(parsed["duration_days"])
+    elif not is_explicit_new_destination and old_duration:
+        duration = int(old_duration)
+    elif dep_date and ret_date:
+        try:
+            d_dt = datetime.datetime.strptime(dep_date, "%Y-%m-%d").date()
+            r_dt = datetime.datetime.strptime(ret_date, "%Y-%m-%d").date()
+            diff = (r_dt - d_dt).days
+            duration = max(1, diff if diff > 1 else diff + 1)
+        except Exception:
+            duration = None
+    if not ret_date and dep_date and duration:
+        try:
+            d_dt = datetime.datetime.strptime(dep_date, "%Y-%m-%d").date()
+            ret_date = (d_dt + datetime.timedelta(days=duration)).strftime("%Y-%m-%d")
+        except Exception:
+            pass
 
     # Total budget merge logic (preserves existing budget; does not overwrite with None/0 or category budgets)
     total_budget_update = parsed.get("total_budget_update")
@@ -201,59 +249,45 @@ def parse_request_node(state: AgentState) -> Dict[str, Any]:
         activity_budget = float(parsed["activity_budget"]) if parsed.get("activity_budget") else (float(budget_updates["activities"]) if "activities" in budget_updates else None)
         transport_budget = float(parsed["transport_budget"]) if parsed.get("transport_budget") else (float(budget_updates["transport"]) if "transport" in budget_updates else None)
 
-    # Trace logging showing state flow
-    _safe_log("=" * 60)
-    _safe_log(f"INTENT: {intent}")
-    _safe_log(f"DESTINATION: {dest}")
-    _safe_log(f"ORIGIN: {orig}")
-    _safe_log(f"DATES: {dep_date} -> {ret_date}")
-    _safe_log(f"DURATION: {duration}")
-    _safe_log(f"TOTAL_BUDGET: {current_budget}")
-    _safe_log(f"HOTEL_BUDGET: {hotel_budget}")
-    _safe_log(f"FLIGHT_BUDGET: {flight_budget}")
-    _safe_log(f"THREAD_ID: {thread_id}")
-    _safe_log("=" * 60)
+    # Check if duration changed in this turn
+    duration_changed = bool(old_duration and duration and int(old_duration) != int(duration))
+    if duration_changed and dep_date and duration:
+        try:
+            d_dt = datetime.datetime.strptime(dep_date, "%Y-%m-%d").date()
+            ret_date = (d_dt + datetime.timedelta(days=duration)).strftime("%Y-%m-%d")
+        except Exception:
+            pass
 
-    events = state.get("agent_events", [])
-    event_label = "Gemini AI" if ai_mode == "llm" else ("Fallback parser" if ai_mode == "fallback" else "Deterministic Parser")
-    
-    if intent in ["budget_adjustment", "follow_up"]:
-        if parsed.get("duration_days") and parsed["duration_days"] != old_duration:
-            event_text = f"Follow-up: Adjusted trip duration to {duration} days"
-        elif total_budget_update:
-            event_text = f"Follow-up: Updated total trip budget to ₹{int(current_budget):,}"
-        elif budget_updates:
-            cat_desc = ', '.join([f"{k} (₹{int(v):,})" for k, v in budget_updates.items()])
-            event_text = f"Follow-up: Updated budget envelopes for {cat_desc}"
-        elif parsed.get("origin") and parsed["origin"] != old_orig:
-            event_text = f"Follow-up: Updated origin departure city to {orig}"
-        elif parsed.get("destination") and parsed["destination"] != old_dest:
-            event_text = f"Follow-up: Updated destination to {dest}"
-        else:
-            event_text = f"Follow-up: Received trip details ({prompt})"
-    elif intent in ["hotel_search", "flight_search", "restaurant_search", "activity_search", "transport_search"]:
-        event_text = f"Searching {intent.replace('_', ' ').title()} for {dest or 'your destination'}"
-    else:
-        event_text = f"Request understood ({event_label}): {intent.replace('_', ' ').title()}"
+    # Category update flag
+    category_updated_this_turn = None
+    if "hotel" in budget_updates or parsed.get("hotel_budget"):
+        category_updated_this_turn = "hotel"
+    elif "flights" in budget_updates or parsed.get("flight_budget"):
+        category_updated_this_turn = "flights"
+    elif "dining" in budget_updates or parsed.get("dining_budget"):
+        category_updated_this_turn = "dining"
+    elif "activities" in budget_updates or parsed.get("activity_budget"):
+        category_updated_this_turn = "activities"
+    elif "transport" in budget_updates or parsed.get("transport_budget"):
+        category_updated_this_turn = "transport"
 
-    events = _add_event(events, event_text, "system")
+    events = _add_event(
+        state.get("agent_events", []),
+        f"Intent classified: {intent} (Destination: {dest or 'None'}, Origin: {orig or 'None'}, Duration: {duration or 'None'}d, Budget: ₹{current_budget or 0:,.0f})",
+        "system"
+    )
 
     steps = [
-        {"id": "step-1", "label": "Understanding request", "status": "complete", "completed_description": event_text},
-        {"id": "step-2", "label": "Executing search & validation", "status": "active", "active_description": "Validating travel parameters..."}
+        {"id": "step-1", "label": "Understanding request", "status": "complete", "completed_description": f"Request: {intent.replace('_', ' ').title()}"}
     ]
-
-    duration_changed = False
-    if parsed.get("duration_days") and old_duration and int(parsed["duration_days"]) != int(old_duration):
-        duration_changed = True
-
-    category_updated_this_turn = parsed.get("category_updated_this_turn")
 
     return {
         "thread_id": thread_id,
         "intent": intent,
         "destination": dest,
         "origin": orig,
+        "home_address": home_addr,
+        "home_city": home_city,
         "duration": duration,
         "duration_days": duration,
         "duration_changed": duration_changed,
@@ -288,7 +322,7 @@ def parse_request_node(state: AgentState) -> Dict[str, Any]:
 def collect_details_node(state: AgentState) -> Dict[str, Any]:
     """
     Evaluates whether all essential travel details exist.
-    If core destination/duration/budget is missing for trip planning, pauses for clarification.
+    If core destination/duration/budget/origin/dates are missing for trip planning, pauses for clarification.
     For search queries (e.g. hotel_search), performs search directly once destination is known.
     """
     intent = state.get("intent", "trip_planning")
@@ -309,11 +343,26 @@ def collect_details_node(state: AgentState) -> Dict[str, Any]:
         if not dest:
             missing.append("destination")
             question = "Where would you like to travel?"
-        # Check if both duration and budget are missing (e.g. "Plan a trip to Paris")
+        # Check if duration and budget are missing (e.g. "Plan a trip to Paris")
         elif not dur and not dep_date and budget is None:
             missing.append("duration_days")
             missing.append("budget")
+            if not orig:
+                missing.append("origin")
+            if not dep_date:
+                missing.append("dates")
             question = f"I'd love to help you plan a trip to {dest}! How many days are you planning to stay and what's your approximate budget?"
+        # Missing origin and/or travel dates
+        elif not orig and not dep_date:
+            missing.append("origin")
+            missing.append("dates")
+            question = "What city will you be traveling from, and what dates would you like to travel?"
+        elif not orig and dep_date:
+            missing.append("origin")
+            question = "What city will you be traveling from?"
+        elif orig and not dep_date:
+            missing.append("dates")
+            question = "What dates would you like to travel?"
 
         if missing:
             events = _add_event(events, f"Clarification requested: {question}", "system")
@@ -322,6 +371,13 @@ def collect_details_node(state: AgentState) -> Dict[str, Any]:
             ]
 
             return {
+                "destination": dest,
+                "origin": orig,
+                "departure_date": dep_date,
+                "return_date": ret_date,
+                "duration": dur,
+                "duration_days": dur,
+                "budget": budget,
                 "status": "needs_input",
                 "missing_fields": missing,
                 "question": question,
@@ -330,11 +386,11 @@ def collect_details_node(state: AgentState) -> Dict[str, Any]:
                 "step_progress": step_progress
             }
 
-        effective_orig = orig or "Mumbai"
+        effective_orig = orig
         effective_dur = dur or 4
-        effective_dep_date = dep_date or "2026-09-14"
+        effective_dep_date = dep_date
         effective_ret_date = ret_date or (
-            (datetime.date(2026, 9, 14) + datetime.timedelta(days=effective_dur)).strftime("%Y-%m-%d")
+            (datetime.datetime.strptime(dep_date, "%Y-%m-%d").date() + datetime.timedelta(days=effective_dur)).strftime("%Y-%m-%d") if dep_date else None
         )
 
         return {
@@ -1165,6 +1221,7 @@ def load_preferences_node(state: AgentState) -> Dict[str, Any]:
     destination = state.get("destination", "Goa")
     travel_style = state.get("travel_style", "Luxury boutique")
     interests = state.get("interests", ["heritage", "cafés"])
+    existing_prefs = state.get("preferences") or {}
 
     mock_prefs = {
         "travel_style": travel_style,
@@ -1174,7 +1231,8 @@ def load_preferences_node(state: AgentState) -> Dict[str, Any]:
         "aiPreferences": {
             "askBeforePurchases": True,
             "alertBudgetRisks": True
-        }
+        },
+        **existing_prefs
     }
 
     events = _add_event(

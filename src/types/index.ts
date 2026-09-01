@@ -294,6 +294,14 @@ export interface Transaction {
   method: string;
 }
 
+export interface HomeAddress {
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  postal_code: string;
+}
+
 export interface UserPreferences {
   name: string;
   email: string;
@@ -303,6 +311,7 @@ export interface UserPreferences {
   foodPreferences: string[];
   typicalTripBudget: number;
   currency: string;
+  homeAddress?: HomeAddress;
   totalSpent?: number;
   totalBudget?: number;
   transactions?: Transaction[];

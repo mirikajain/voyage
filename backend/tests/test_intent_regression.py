@@ -48,9 +48,9 @@ def test_three_turn_conversation_flow():
     print("\n--- 2. TESTING 3-TURN CONVERSATION (Plan Trip -> Budget Adjustment -> Hotel Discovery) ---")
     thread_id = "test_three_turn_chain_conv"
 
-    # Turn 1: "Plan a 4-day Goa trip under ₹40,000"
-    print("\n>>> Turn 1: Plan a 4-day Goa trip under ₹40,000")
-    r1 = client.post("/api/agent/run", json={"message": "Plan a 4-day Goa trip under ₹40,000", "thread_id": thread_id})
+    # Turn 1: "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000"
+    print("\n>>> Turn 1: Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000")
+    r1 = client.post("/api/agent/run", json={"message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000", "thread_id": thread_id})
     assert r1.status_code == 200
     d1 = r1.json()
     assert d1["status"] in ["completed", "awaiting_approval"]

@@ -6,10 +6,19 @@ from app.models.payment_schemas import (
     PaymentConfirmationSchema
 )
 
+class HomeAddressSchema(BaseModel):
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = "India"
+    postal_code: Optional[str] = None
+
 class AgentRunRequest(BaseModel):
     message: str = Field(..., description="User prompt or travel planning query")
     thread_id: Optional[str] = Field(None, description="Session thread ID for state checkpointing")
     user_id: Optional[str] = Field("advait_sharma", description="User ID for preference lookup")
+    user_preferences: Optional[Dict[str, Any]] = None
+    home_address: Optional[Dict[str, Any]] = None
 
 class ResumeApprovalRequest(BaseModel):
     approved: bool = Field(True, description="Whether user approved or rejected the payment authorization")

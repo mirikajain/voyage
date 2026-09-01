@@ -290,10 +290,24 @@ async def run_agent_workflow(request: AgentRunRequest):
         except Exception:
             pass
 
+    # Ingest preferences and home address from request if provided
+    prefs = request.user_preferences or existing_state.get("preferences") or {}
+    home_addr = request.home_address or (request.user_preferences or {}).get("home_address") or (request.user_preferences or {}).get("homeAddress") or existing_state.get("home_address")
+    home_city = None
+    if isinstance(home_addr, dict):
+        home_city = home_addr.get("city")
+    elif isinstance(home_addr, str):
+        home_city = home_addr
+    if not home_city:
+        home_city = (request.user_preferences or {}).get("home_city") or (request.user_preferences or {}).get("homeCity") or existing_state.get("home_city")
+
     initial_state = {
         **existing_state,
         "thread_id": thread_id,
         "request": request.message,
+        "preferences": prefs,
+        "home_address": home_addr,
+        "home_city": home_city,
         "agent_events": existing_state.get("agent_events", []),
         "step_progress": [],
         "optimization_attempts": 0,

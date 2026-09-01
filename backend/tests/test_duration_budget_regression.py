@@ -1,3 +1,10 @@
+import sys
+import os
+
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 from app.agent.graph import voyage_agent_app
 
 def test_five_step_conversation_and_duration_budget_regression():
@@ -17,8 +24,8 @@ def test_five_step_conversation_and_duration_budget_regression():
     # STEP 1: Plan a 4-day Goa trip under ₹40,000
     # -------------------------------------------------------------
     res1 = voyage_agent_app.invoke({
-        "request": "Plan a 4-day Goa trip under ₹40,000",
-        "message": "Plan a 4-day Goa trip under ₹40,000",
+        "request": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000",
+        "message": "Plan a 4-day Goa trip from Mumbai from September 14 to September 18 under ₹40,000",
         "thread_id": thread_id,
         "ai_mode": "demo"
     }, config=config)
@@ -191,4 +198,8 @@ def test_five_step_conversation_and_duration_budget_regression():
     )
     assert abs(float(res6.get("estimated_total", 0.0)) - total6) < 0.01
     assert abs(float(res6.get("remaining_budget", 0.0)) - (40000.0 - total6)) < 0.01
+    print("[PASS] test_five_step_conversation_and_duration_budget_regression passed 100%!")
+
+if __name__ == "__main__":
+    test_five_step_conversation_and_duration_budget_regression()
 

@@ -121,26 +121,48 @@ def extract_numeric_value(text: str) -> Optional[float]:
 def parse_date_range(text: str) -> tuple:
     """
     Parses date ranges such as:
-    - 'September 14 to September 18'
-    - 'Sep 14 to Sep 18'
-    - 'Sep 14 - 18' / 'Sep 14-18' / 'September 14–18'
-    - '14th Sep to 18th Sep'
-    - 'next weekend'
+    - 'September 15 to September 18'
+    - '15 Sep to 18 Sep' / '15th Sep to 18th Sep'
+    - 'Sep 15–18' / 'Sep 15 - 18' / 'September 15-18' / 'September 15 to 18'
+    - '15/09/2026 to 18/09/2026' / '15/09 to 18/09'
+    - 'next Friday to Sunday' / 'this weekend' / 'next weekend'
     Returns (departure_date_str, return_date_str, duration_days)
     """
-    lower = text.lower()
+    lower = text.lower().replace("–", "-").replace("—", "-")
     year = 2026
 
-    # Pattern A: "September 14 to September 18" or "Sep 14 to Sep 18"
-    p1 = re.search(
-        r'(?:from\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?\s*(?:to|-|–|until|through)\s*(?:(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+)?(\d{1,2})(?:st|nd|rd|th)?',
+    # 1. Numeric slash or hyphen dates e.g. "15/09/2026 to 18/09/2026" or "15/09 to 18/09"
+    p_num = re.search(
+        r'(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\s*(?:to|-|until|through)\s*(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?',
         lower
     )
-    if p1:
-        m1_str = p1.group(1)
-        d1_num = int(p1.group(2))
-        m2_str = p1.group(3) or m1_str
-        d2_num = int(p1.group(4))
+    if p_num:
+        d1 = int(p_num.group(1))
+        m1 = int(p_num.group(2))
+        y1 = int(p_num.group(3)) if p_num.group(3) else year
+        if y1 < 100: y1 += 2000
+        d2 = int(p_num.group(4))
+        m2 = int(p_num.group(5))
+        y2 = int(p_num.group(6)) if p_num.group(6) else y1
+        if y2 < 100: y2 += 2000
+        try:
+            dep_dt = datetime.date(y1, m1, d1)
+            ret_dt = datetime.date(y2, m2, d2)
+            dur = max(1, (ret_dt - dep_dt).days)
+            return dep_dt.strftime("%Y-%m-%d"), ret_dt.strftime("%Y-%m-%d"), dur
+        except Exception:
+            pass
+
+    # 2. "September 15 to September 18" or "Sep 15 to Sep 18" or "September 15 to 18" or "Sep 15-18"
+    p_month_first = re.search(
+        r'(?:from\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?\s*(?:to|-|until|through)\s*(?:(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+)?(\d{1,2})(?:st|nd|rd|th)?',
+        lower
+    )
+    if p_month_first:
+        m1_str = p_month_first.group(1)
+        d1_num = int(p_month_first.group(2))
+        m2_str = p_month_first.group(3) or m1_str
+        d2_num = int(p_month_first.group(4))
 
         m1 = MONTH_MAP.get(m1_str[:3], 9)
         m2 = MONTH_MAP.get(m2_str[:3], m1)
@@ -152,16 +174,16 @@ def parse_date_range(text: str) -> tuple:
         except Exception:
             pass
 
-    # Pattern B: "14th Sep to 18th Sep"
-    p2 = re.search(
-        r'(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*(?:to|-|–)\s*(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)',
+    # 3. "15 Sep to 18 Sep" or "15th September to 18th September" or "15 to 18 Sep"
+    p_day_first = re.search(
+        r'(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?(?:(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*)?(?:to|-)\s*(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)',
         lower
     )
-    if p2:
-        d1_num = int(p2.group(1))
-        m1_str = p2.group(2)
-        d2_num = int(p2.group(3))
-        m2_str = p2.group(4)
+    if p_day_first:
+        d1_num = int(p_day_first.group(1))
+        m1_str = p_day_first.group(2) or p_day_first.group(4)
+        d2_num = int(p_day_first.group(3))
+        m2_str = p_day_first.group(4)
         m1 = MONTH_MAP.get(m1_str[:3], 9)
         m2 = MONTH_MAP.get(m2_str[:3], m1)
         try:
@@ -172,13 +194,17 @@ def parse_date_range(text: str) -> tuple:
         except Exception:
             pass
 
-    # Pattern C: "next weekend"
+    # 4. Natural keywords: "this weekend", "next weekend", "next friday to sunday"
+    if "next friday to sunday" in lower or "friday to sunday" in lower:
+        return "2026-09-18", "2026-09-20", 2
     if "next weekend" in lower or "upcoming weekend" in lower:
         return "2026-09-18", "2026-09-20", 2
+    if "this weekend" in lower:
+        return "2026-09-11", "2026-09-13", 2
 
-    # Pattern D: Single date mention "Sep 14"
+    # 5. Single date mention: "Sep 15" or "September 15th"
     single_date = re.search(
-        r'(?:on\s+|for\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?',
+        r'(?:on\s+|for\s+|from\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?',
         lower
     )
     if single_date:
@@ -224,6 +250,16 @@ def parse_request_deterministic(prompt: str) -> Dict[str, Any]:
     origin = None
     destination = None
 
+    # Handle combined follow-up reply e.g. "Delhi, September 15 to September 18" or "Delhi"
+    dep_cand, ret_cand, _ = parse_date_range(prompt)
+    if dep_cand:
+        # Check if text preceding date contains a city name e.g. "Delhi September 15 to 18"
+        p_lead = re.split(r'\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}[\/\-])', lower, maxsplit=1)
+        if p_lead and p_lead[0].strip():
+            lead_cand = clean_location_name(p_lead[0])
+            if lead_cand and lead_cand.lower() not in ["from", "on", "for", "in", "to"]:
+                origin = lead_cand
+
     from_to_match = re.search(
         r'(?:flying\s+|flights?\s+)?from\s+([a-zA-Z\s]+?)\s+to\s+([a-zA-Z\s]+?)(?:\s+(?:for|under|with|from|on|in|\d|₹|budget|trip|tour|near|at|from)|$)',
         lower
@@ -254,6 +290,13 @@ def parse_request_deterministic(prompt: str) -> Dict[str, Any]:
             origin_cand = clean_location_name(from_match.group(1))
             if origin_cand and origin_cand.lower() not in ["september", "sep", "october", "oct", "november", "nov", "december", "dec", "january", "jan", "february", "feb", "march", "mar", "april", "apr", "may", "june", "jun", "july", "jul", "august", "aug"]:
                 origin = origin_cand
+
+    # Standalone single-word city reply e.g. user just said "Delhi" or "Mumbai"
+    if not origin and not destination and not is_new_plan_query and not is_hotel_query and not is_flight_query and not is_restaurant_query and not is_activity_query and not is_change_budget_query:
+        clean_prompt = clean_location_name(prompt)
+        known_cities = ["delhi", "mumbai", "bangalore", "bengaluru", "chennai", "kolkata", "hyderabad", "pune", "ahmedabad", "jaipur", "goa", "paris", "london", "dubai", "singapore", "tokyo", "chandigarh", "lucknow", "kochi", "varanasi"]
+        if clean_prompt and clean_prompt.lower() in known_cities:
+            origin = clean_prompt
 
     if not destination:
         near_match = re.search(r'near\s+([a-zA-Z\s]+?)(?:\s+(?:for|under|with|from|on|in|\d|₹|budget)|$)', lower)
@@ -311,28 +354,29 @@ def parse_request_deterministic(prompt: str) -> Dict[str, Any]:
     # 3. DURATION & DATES EXTRACTION
     # -------------------------------------------------------------
     dep_date, ret_date, date_duration = parse_date_range(prompt)
-    duration = date_duration
+    duration = None
 
-    if duration is None:
-        day_match = re.search(r'(\d+)\s*(-|\s)?(day|days|night|nights)', lower)
-        if day_match:
-            duration = int(day_match.group(1))
-        elif re.search(r'for\s+(\d+)\s*(day|days|night|nights)', lower):
-            duration = int(re.search(r'for\s+(\d+)\s*(day|days|night|nights)', lower).group(1))
-        elif "two day" in lower or "2 day" in lower or "weekend" in lower:
-            duration = 2
-        elif "one day" in lower or "1 day" in lower:
-            duration = 1
-        elif "three day" in lower or "3 day" in lower or "three days" in lower or "3 days" in lower:
-            duration = 3
-        elif "four day" in lower or "4 day" in lower or "four days" in lower or "4 days" in lower:
-            duration = 4
-        elif "five day" in lower or "5 day" in lower or "five days" in lower or "5 days" in lower:
-            duration = 5
-        elif "six day" in lower or "6 day" in lower or "six days" in lower or "6 days" in lower:
-            duration = 6
-        elif "seven day" in lower or "7 day" in lower or "week" in lower or "7 days" in lower:
-            duration = 7
+    day_match = re.search(r'(\d+)\s*(-|\s)?(day|days|night|nights)', lower)
+    if day_match:
+        duration = int(day_match.group(1))
+    elif re.search(r'for\s+(\d+)\s*(day|days|night|nights)', lower):
+        duration = int(re.search(r'for\s+(\d+)\s*(day|days|night|nights)', lower).group(1))
+    elif "two day" in lower or "2 day" in lower or "weekend" in lower:
+        duration = 2
+    elif "one day" in lower or "1 day" in lower:
+        duration = 1
+    elif "three day" in lower or "3 day" in lower or "three days" in lower or "3 days" in lower:
+        duration = 3
+    elif "four day" in lower or "4 day" in lower or "four days" in lower or "4 days" in lower:
+        duration = 4
+    elif "five day" in lower or "5 day" in lower or "five days" in lower or "5 days" in lower:
+        duration = 5
+    elif "six day" in lower or "6 day" in lower or "six days" in lower or "6 days" in lower:
+        duration = 6
+    elif "seven day" in lower or "7 day" in lower or "week" in lower or "7 days" in lower:
+        duration = 7
+    elif date_duration:
+        duration = date_duration
 
     # -------------------------------------------------------------
     # 4. CATEGORY BUDGET UPDATES & NUMERIC PARSING
