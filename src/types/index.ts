@@ -18,6 +18,8 @@ export interface TripCostBreakdown {
   hotelIsLive?: boolean;
   travelSource?: string;
   travelIsLive?: boolean;
+  budgetEnvelopes?: Record<string, number>;
+  categoryStatus?: Record<string, string>;
 }
 
 export interface ItineraryItem {
@@ -34,17 +36,123 @@ export interface ItineraryDay {
   items: ItineraryItem[];
 }
 
+export interface SearchResultItem {
+  id: string;
+  airline?: string;
+  flight_number?: string;
+  departure_time?: string;
+  arrival_time?: string;
+  duration?: string;
+  status?: string;
+  stops?: number;
+  name?: string;
+  location?: string;
+  rating?: number;
+  cuisine?: string;
+  category?: string;
+  cost?: number;
+  price?: number;
+  total_price?: number;
+  currency?: string;
+  source?: string;
+  is_live?: boolean;
+  amenities?: string[];
+  image?: string;
+}
+
+export interface SearchResultsData {
+  type: string;  // "flights" | "hotels" | "restaurants" | "activities"
+  query_title: string;
+  items: SearchResultItem[];
+  total_count: number;
+  provider: string;
+  is_live: boolean;
+}
+
+export interface SpendGuardrailResult {
+  allowed: boolean;
+  requires_approval: boolean;
+  reason: string;
+  budget_ceiling?: number;
+  requested_amount: number;
+  remaining_buffer: number;
+  is_budget_exceeded: boolean;
+  autonomous_limit?: number;
+  ask_before_purchase?: boolean;
+}
+
+export interface RazorpayOrderData {
+  order_id: string;
+  amount_in_paise: number;
+  amount_in_rupees: number;
+  currency: string;
+  status: string;
+  payment_reference: string;
+  key_id?: string;
+  mode: string;
+  merchant_name?: string;
+}
+
+export interface PaymentConfirmationData {
+  payment_id: string;
+  order_id: string;
+  payment_reference: string;
+  booking_reference: string;
+  amount: number;
+  currency: string;
+  status: 'paid' | 'failed' | 'cancelled';
+  timestamp: string;
+  method: string;
+  receipt?: string;
+}
+
+export interface ApprovalRequestData {
+  action: string;
+  item: string;
+  amount: number;
+  currency: string;
+  payment_reference: string;
+  requires_approval: boolean;
+  approval_reason: string;
+  budget?: number;
+  remaining_buffer: number;
+  gateway?: string;
+}
+
 export interface AgentRecommendationResult {
   id: string;
+  thread_id?: string;
   planTitle: string;
+  intent?: 'trip_planning' | 'flight_search' | 'hotel_search' | 'restaurant_search' | 'activity_search' | 'transport_search' | 'general_travel';
   destination: string;
+  origin?: string;
+  departureDate?: string;
+  returnDate?: string;
   durationDays: number;
+  travelers?: number;
   breakdown: TripCostBreakdown;
   reasons: string[];
   itinerary: ItineraryDay[];
+  searchResults?: SearchResultsData;
+  budgetEnvelopes?: Record<string, number>;
+  categoryStatus?: Record<string, string>;
+  
+  // Phase 5 Financial & Approval Layer
+  requiresApproval?: boolean;
+  approvalStatus?: 'pending' | 'approved' | 'rejected' | 'blocked_by_guardrails';
+  approvalRequest?: ApprovalRequestData;
+  paymentStatus?: 'not_started' | 'preparing' | 'awaiting_approval' | 'approved' | 'processing' | 'paid' | 'failed' | 'cancelled' | 'rejected';
+  bookingStatus?: 'not_started' | 'processing' | 'confirmed' | 'failed';
+  paymentAmount?: number;
+  paymentReference?: string;
+  paymentOrder?: RazorpayOrderData;
+  paymentConfirmation?: PaymentConfirmationData;
+  spendGuardrailResult?: SpendGuardrailResult;
+
   isBudgetExceeded: boolean;
   compromiseMessage?: string;
   dataSourceNotice: string;
+  optimizationAttempts?: number;
   aiMode?: 'llm' | 'demo' | 'fallback';
   providerSummary?: Record<string, any>;
 }
@@ -75,8 +183,11 @@ export interface Trip {
   totalBudget: number;
   amountSpent: number;
   currency: string;
-  status: 'Upcoming' | 'Active Planning' | 'Past';
+  status: 'Upcoming' | 'Active Planning' | 'Past' | 'Booked';
   travelVibe: string;
+  bookingReference?: string;
+  paymentReference?: string;
+  paymentStatus?: string;
   flightDetails?: {
     airline: string;
     flightNumber: string;
@@ -157,6 +268,9 @@ export interface UserPreferences {
   foodPreferences: string[];
   typicalTripBudget: number;
   currency: string;
+  totalSpent?: number;
+  totalBudget?: number;
+  transactions?: Transaction[];
   aiPreferences: {
     askBeforePurchases: boolean;
     alertBudgetRisks: boolean;

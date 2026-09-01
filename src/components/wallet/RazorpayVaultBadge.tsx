@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { mockTransactions } from '../../data/mockData';
+import { useApp } from '../../context/AppContext';
 
 export const RazorpayVaultBadge: React.FC = () => {
   return (
@@ -31,6 +32,11 @@ export const RazorpayVaultBadge: React.FC = () => {
 };
 
 export const TransactionLedger: React.FC = () => {
+  const { userProfile } = useApp();
+  const txList = userProfile.transactions && userProfile.transactions.length > 0
+    ? userProfile.transactions
+    : mockTransactions;
+
   return (
     <div className="bg-white rounded-3xl p-6 sm:p-8 border border-voyage-border/80 shadow-soft-sm space-y-4">
       <div className="flex items-center justify-between">
@@ -44,7 +50,7 @@ export const TransactionLedger: React.FC = () => {
       </div>
 
       <div className="divide-y divide-voyage-border/60">
-        {mockTransactions.map((tx) => (
+        {txList.map((tx) => (
           <div key={tx.id} className="py-3.5 flex items-center justify-between gap-4">
             <div className="space-y-0.5">
               <h5 className="text-xs sm:text-sm font-semibold text-voyage-dark">{tx.title}</h5>
@@ -59,7 +65,7 @@ export const TransactionLedger: React.FC = () => {
 
             <div className="text-right">
               <span className="text-xs sm:text-sm font-bold text-voyage-dark">
-                {tx.currency}{tx.amount.toLocaleString()}
+                {tx.currency} {tx.amount.toLocaleString()}
               </span>
               <p className="text-[10px] text-emerald-700 font-medium">{tx.status}</p>
             </div>

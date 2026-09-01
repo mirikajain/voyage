@@ -12,9 +12,9 @@ from app.providers.places_provider import GooglePlacesProvider
 
 class TravelService:
     """
-    Central Travel Service Orchestrator for Voyage.
-    Routes queries to Aviationstack (flights), Google Places (restaurants/attractions),
-    and Voyage Demo Provider (hotels, activities, transport).
+    Central router for Voyage travel services.
+    Dispatches to real providers (Aviationstack, Google Places) when configured & live,
+    falling back seamlessly to verified simulated data in demo mode.
     """
 
     @classmethod
@@ -41,20 +41,83 @@ class TravelService:
             if live_flights:
                 return live_flights
 
-        # Curated / Demo fallback based on destination
+        # Curated / Demo fallback based on origin & destination
         dest_lower = destination.lower()
-        if "goa" in dest_lower:
+        orig_lower = origin.lower()
+
+        # Delhi -> Mumbai route
+        if "delhi" in orig_lower and "mumbai" in dest_lower:
             return [
                 FlightOption(
-                    id="flt-indigo-001",
-                    provider="IndiGo Premier / Vistara",
-                    airline="IndiGo Premier / Vistara Club",
+                    id="flt-del-bom-001",
+                    provider="IndiGo Premier",
+                    airline="IndiGo (6E-5022)",
+                    flight_number="6E-5022",
+                    origin=f"{origin} (DEL)",
+                    destination=f"{destination} (BOM)",
+                    departure_time="07:15 AM",
+                    arrival_time="09:25 AM",
+                    duration="2h 10m",
+                    status="scheduled",
+                    stops=0,
+                    price=5400.0,
+                    total_price=5400.0,
+                    currency="INR",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                FlightOption(
+                    id="flt-del-bom-002",
+                    provider="Vistara Club",
+                    airline="Vistara (UK-955)",
+                    flight_number="UK-955",
+                    origin=f"{origin} (DEL)",
+                    destination=f"{destination} (BOM)",
+                    departure_time="09:30 AM",
+                    arrival_time="11:45 AM",
+                    duration="2h 15m",
+                    status="scheduled",
+                    stops=0,
+                    price=6800.0,
+                    total_price=6800.0,
+                    currency="INR",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                FlightOption(
+                    id="flt-del-bom-003",
+                    provider="Air India Premier",
+                    airline="Air India (AI-805)",
+                    flight_number="AI-805",
+                    origin=f"{origin} (DEL)",
+                    destination=f"{destination} (BOM)",
+                    departure_time="06:00 PM",
+                    arrival_time="08:15 PM",
+                    duration="2h 15m",
+                    status="scheduled",
+                    stops=0,
+                    price=5900.0,
+                    total_price=5900.0,
+                    currency="INR",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+
+        # Delhi -> Goa or Mumbai -> Goa route
+        if "goa" in dest_lower:
+            orig_iata = "DEL" if "delhi" in orig_lower else "BOM"
+            return [
+                FlightOption(
+                    id="flt-indigo-goa-001",
+                    provider="IndiGo Premier",
+                    airline="IndiGo Premier (6E-241)",
                     flight_number="6E-241",
-                    origin=f"{origin} (BOM)",
+                    origin=f"{origin} ({orig_iata})",
                     destination="Goa (GOX)",
                     departure_time="08:45 AM",
                     arrival_time="10:05 AM",
-                    duration="1h 20m",
+                    duration="1h 20m" if orig_iata == "BOM" else "2h 30m",
                     status="scheduled",
                     stops=0,
                     price=8000.0,
@@ -62,16 +125,37 @@ class TravelService:
                     currency="INR",
                     source="Voyage Demo Provider",
                     is_live=False
+                ),
+                FlightOption(
+                    id="flt-airindia-goa-002",
+                    provider="Air India Express",
+                    airline="Air India Express (IX-114)",
+                    flight_number="IX-114",
+                    origin=f"{origin} ({orig_iata})",
+                    destination="Goa (GOI)",
+                    departure_time="01:15 PM",
+                    arrival_time="03:40 PM",
+                    duration="2h 25m",
+                    status="scheduled",
+                    stops=0,
+                    price=7400.0,
+                    total_price=7400.0,
+                    currency="INR",
+                    source="Voyage Demo Provider",
+                    is_live=False
                 )
             ]
-        elif "jaipur" in dest_lower:
+
+        # Jaipur route
+        if "jaipur" in dest_lower:
+            orig_iata = "DEL" if "delhi" in orig_lower else "BOM"
             return [
                 FlightOption(
                     id="flt-indigo-jai-001",
-                    provider="IndiGo Premier / Air India",
-                    airline="IndiGo Premier 6E-552",
+                    provider="IndiGo Premier",
+                    airline="IndiGo (6E-552)",
                     flight_number="6E-552",
-                    origin=f"{origin} (BOM)",
+                    origin=f"{origin} ({orig_iata})",
                     destination="Jaipur (JAI)",
                     departure_time="07:30 AM",
                     arrival_time="09:15 AM",
@@ -83,16 +167,36 @@ class TravelService:
                     currency="INR",
                     source="Voyage Demo Provider",
                     is_live=False
+                ),
+                FlightOption(
+                    id="flt-airindia-jai-002",
+                    provider="Air India Direct",
+                    airline="Air India (AI-491)",
+                    flight_number="AI-491",
+                    origin=f"{origin} ({orig_iata})",
+                    destination="Jaipur (JAI)",
+                    departure_time="05:20 PM",
+                    arrival_time="06:55 PM",
+                    duration="1h 35m",
+                    status="scheduled",
+                    stops=0,
+                    price=5800.0,
+                    total_price=5800.0,
+                    currency="INR",
+                    source="Voyage Demo Provider",
+                    is_live=False
                 )
             ]
-        elif "paris" in dest_lower:
+
+        # Paris route
+        if "paris" in dest_lower:
             return [
                 FlightOption(
                     id="flt-airfrance-001",
                     provider="Air France Priority",
-                    airline="Air France AF-217",
+                    airline="Air France (AF-217)",
                     flight_number="AF-217",
-                    origin=f"{origin} (BOM)",
+                    origin=f"{origin} (BOM/DEL)",
                     destination="Paris (CDG)",
                     departure_time="02:15 AM",
                     arrival_time="08:00 AM",
@@ -106,413 +210,568 @@ class TravelService:
                     is_live=False
                 )
             ]
-        else:
-            return [
-                FlightOption(
-                    id=f"flt-{dest_lower}-001",
-                    provider="Air India Premier",
-                    airline="Air India Premier",
-                    flight_number="AI-204",
-                    origin=origin,
-                    destination=destination,
-                    departure_time="09:00 AM",
-                    arrival_time="11:30 AM",
-                    duration="2h 30m",
-                    status="scheduled",
-                    stops=0,
-                    price=9000.0,
-                    total_price=9000.0,
-                    currency="INR",
-                    source="Voyage Demo Provider",
-                    is_live=False
-                )
-            ]
+
+        # Generic route
+        return [
+            FlightOption(
+                id=f"flt-generic-{destination.lower()[:3]}-001",
+                provider="Premier Partner Airlines",
+                airline=f"Direct Premier Flight to {destination}",
+                flight_number="6E-108",
+                origin=f"{origin}",
+                destination=f"{destination}",
+                departure_time="08:30 AM",
+                arrival_time="10:45 AM",
+                duration="2h 15m",
+                status="scheduled",
+                stops=0,
+                price=8500.0,
+                total_price=8500.0,
+                currency="INR",
+                source="Voyage Demo Provider",
+                is_live=False
+            )
+        ]
 
     @classmethod
-    def search_hotels(
-        cls,
-        destination: str,
-        duration_days: int = 4,
-        tier: str = "boutique"
-    ) -> List[HotelOption]:
-        """
-        Hotel search with dynamic duration pricing and destination-specific inventory.
-        """
-        nights = max(1, duration_days - 1)
+    def search_hotels(cls, destination: str, duration_days: int = 4, tier: str = "luxury_boutique", **kwargs) -> List[HotelOption]:
         dest_lower = destination.lower()
+        nights = max(1, duration_days - 1)
 
         if "goa" in dest_lower:
-            rate_aria = 4266.67
-            rate_ahilya = 6133.33
-            rate_fontainhas = 2400.0
-
             return [
                 HotelOption(
                     id="htl-aria-001",
-                    provider="Aria Luxury Hospitality",
-                    name="Aria Beach Resort",
-                    location="Morjim & Ashwem Coast, North Goa",
+                    name="Aria Beach Resort & Spa",
+                    location="Morjim Beach, North Goa",
                     rating=4.8,
-                    review_count=312,
-                    room_type="Oceanfront Pavilion",
-                    amenities=["Beachfront Access", "Infinity Pool", "Artisanal Breakfast"],
-                    price_per_night=rate_aria,
-                    total_price=round(rate_aria * nights, 2),
+                    price_per_night=3200.0,
+                    cost_per_night=3200.0,
+                    nights=nights,
+                    total_cost=round(3200.0 * nights, 2),
+                    total_price=round(3200.0 * nights, 2),
                     currency="INR",
-                    tier="luxury_boutique",
+                    amenities=["Private Beach Access", "Infinity Pool", "Ayurvedic Spa", "Breakfast Included"],
+                    image="https://images.unsplash.com/photo-1571896349842-33c89424de2d?q=80&w=800&auto=format&fit=crop",
                     source="Voyage Demo Provider",
                     is_live=False
                 ),
                 HotelOption(
-                    id="htl-ahilya-002",
-                    provider="Heritage Retreats",
-                    name="Ahilya by the Sea",
-                    location="Nerul Bay, Goa",
+                    id="htl-w-002",
+                    name="W Goa Retreat",
+                    location="Vagator Beach, North Goa",
                     rating=4.9,
-                    review_count=184,
-                    room_type="Sunrise Suite with Ocean Balcony",
-                    amenities=["Private Heritage Villa", "Seafront Dining", "Spa Codage"],
-                    price_per_night=rate_ahilya,
-                    total_price=round(rate_ahilya * nights, 2),
+                    price_per_night=6500.0,
+                    cost_per_night=6500.0,
+                    nights=nights,
+                    total_cost=round(6500.0 * nights, 2),
+                    total_price=round(6500.0 * nights, 2),
                     currency="INR",
-                    tier="ultra_luxury",
-                    source="Voyage Demo Provider",
-                    is_live=False
-                ),
-                HotelOption(
-                    id="htl-budget-003",
-                    provider="Heritage Stays",
-                    name="Fontainhas Heritage Inn",
-                    location="Panjim Latin Quarter, Goa",
-                    rating=4.5,
-                    review_count=98,
-                    room_type="Standard Heritage Room",
-                    amenities=["Historic Quarter", "Breakfast included"],
-                    price_per_night=rate_fontainhas,
-                    total_price=round(rate_fontainhas * nights, 2),
-                    currency="INR",
-                    tier="value_heritage",
+                    amenities=["Rock Pool", "Private Cabanas", "VIP Concierge"],
+                    image="https://images.unsplash.com/photo-1540541338287-41700207dee6?q=80&w=800&auto=format&fit=crop",
                     source="Voyage Demo Provider",
                     is_live=False
                 )
             ]
         elif "jaipur" in dest_lower:
-            rate_samode = 4800.0
-            rate_raj = 7200.0
-            rate_alsisar = 2600.0
-
             return [
                 HotelOption(
                     id="htl-samode-001",
-                    provider="Heritage Haveli Collection",
                     name="Samode Haveli",
-                    location="Old City, Gangapole, Jaipur",
-                    rating=4.8,
-                    review_count=290,
-                    room_type="Deluxe Heritage Suite with Courtyard View",
-                    amenities=["Mughal Pool", "Royal Courtyard", "Artisanal Breakfast"],
-                    price_per_night=rate_samode,
-                    total_price=round(rate_samode * nights, 2),
-                    currency="INR",
-                    tier="luxury_boutique",
-                    source="Voyage Demo Provider",
-                    is_live=False
-                ),
-                HotelOption(
-                    id="htl-raj-002",
-                    provider="Grand Royal Palaces",
-                    name="The Raj Palace Heritage Residence",
-                    location="Amer Road, Jaipur",
+                    location="Gangapole, Old City, Jaipur",
                     rating=4.9,
-                    review_count=175,
-                    room_type="Maharaja Royal Pavilion",
-                    amenities=["Private Butler", "Museum Tour", "Palace Spa"],
-                    price_per_night=rate_raj,
-                    total_price=round(rate_raj * nights, 2),
+                    price_per_night=4200.0,
+                    cost_per_night=4200.0,
+                    nights=nights,
+                    total_cost=round(4200.0 * nights, 2),
+                    total_price=round(4200.0 * nights, 2),
                     currency="INR",
-                    tier="ultra_luxury",
+                    amenities=["Royal Courtyard Pool", "Heritage Frescoes", "Artisanal Breakfast", "Palace Spa"],
+                    image="https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop",
                     source="Voyage Demo Provider",
                     is_live=False
                 ),
                 HotelOption(
-                    id="htl-alsisar-003",
-                    provider="Heritage Stays Rajasthan",
-                    name="Alsisar Haveli Heritage Stay",
-                    location="Sansar Chandra Road, Jaipur",
-                    rating=4.6,
-                    review_count=120,
-                    room_type="Standard Heritage Deluxe",
-                    amenities=["Historic Haveli", "Pool & Breakfast included"],
-                    price_per_night=rate_alsisar,
-                    total_price=round(rate_alsisar * nights, 2),
+                    id="htl-rajpalace-002",
+                    name="The Raj Palace Grand Heritage",
+                    location="Zorawer Singh Gate, Amer Road, Jaipur",
+                    rating=4.8,
+                    price_per_night=6800.0,
+                    cost_per_night=6800.0,
+                    nights=nights,
+                    total_cost=round(6800.0 * nights, 2),
+                    total_price=round(6800.0 * nights, 2),
                     currency="INR",
-                    tier="value_heritage",
+                    amenities=["Museum Suites", "Royal Dining Pavilion", "Chauffeur Service"],
+                    image="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=800&auto=format&fit=crop",
                     source="Voyage Demo Provider",
                     is_live=False
                 )
             ]
         elif "paris" in dest_lower:
-            rate_madame = 8000.0
             return [
                 HotelOption(
                     id="htl-paris-001",
-                    provider="Parisian Collection",
                     name="Hôtel Madame Rêve",
-                    location="Louvre District, Paris",
-                    rating=4.8,
-                    review_count=420,
-                    room_type="Deluxe Courtyard King",
-                    amenities=["Eiffel Tower View", "Michelin Dining"],
-                    price_per_night=rate_madame,
-                    total_price=round(rate_madame * nights, 2),
+                    location="1st Arrondissement, Louvre, Paris",
+                    rating=4.9,
+                    price_per_night=18000.0,
+                    cost_per_night=18000.0,
+                    nights=nights,
+                    total_cost=round(18000.0 * nights, 2),
+                    total_price=round(18000.0 * nights, 2),
                     currency="INR",
-                    tier="luxury_boutique",
+                    amenities=["Eiffel View Rooftop", "Michelin Dining", "Private Terrace"],
+                    image="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=800&auto=format&fit=crop",
                     source="Voyage Demo Provider",
                     is_live=False
                 )
             ]
-        else:
-            rate_gen = 4500.0
+        elif "kyoto" in dest_lower:
             return [
                 HotelOption(
-                    id=f"htl-{dest_lower}-001",
-                    provider="Voyage Partner Collection",
-                    name=f"{destination} Grand Residence & Suites",
-                    location=f"Central {destination}",
-                    rating=4.7,
-                    review_count=150,
-                    room_type="Executive Boutique Suite",
-                    amenities=["Concierge Suite", "Complimentary Breakfast", "Terrace Lounge"],
-                    price_per_night=rate_gen,
-                    total_price=round(rate_gen * nights, 2),
+                    id="htl-kyoto-001",
+                    name="Kyoto Grand Ryokan & Residence",
+                    location="Gion Heritage District, Kyoto",
+                    rating=4.9,
+                    price_per_night=9500.0,
+                    cost_per_night=9500.0,
+                    nights=nights,
+                    total_cost=round(9500.0 * nights, 2),
+                    total_price=round(9500.0 * nights, 2),
                     currency="INR",
-                    tier="luxury_boutique",
+                    amenities=["Private Onsen Bath", "Zen Garden", "Traditional Kaiseki Breakfast"],
+                    image="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=800&auto=format&fit=crop",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+        else:
+            return [
+                HotelOption(
+                    id=f"htl-{destination.lower()[:3]}-001",
+                    name=f"{destination} Boutique Residence & Spa",
+                    location=f"Central District, {destination}",
+                    rating=4.8,
+                    price_per_night=3800.0,
+                    cost_per_night=3800.0,
+                    nights=nights,
+                    total_cost=round(3800.0 * nights, 2),
+                    total_price=round(3800.0 * nights, 2),
+                    currency="INR",
+                    amenities=["City Views", "Spa & Wellness", "Curated Breakfast", "Concierge"],
+                    image="https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop",
                     source="Voyage Demo Provider",
                     is_live=False
                 )
             ]
 
     @classmethod
-    def search_restaurants(
-        cls,
-        destination: str,
-        duration_days: int = 4
-    ) -> Dict[str, Any]:
+    def search_restaurants(cls, destination: str, duration_days: int = 4) -> Dict[str, Any]:
         mode = cls.get_api_mode()
-
-        # Try live Google Places provider when configured
         if mode == "live" and GooglePlacesProvider.is_configured():
-            live_dining = GooglePlacesProvider.search_restaurants(
-                destination=destination,
-                duration_days=duration_days
-            )
+            live_dining = GooglePlacesProvider.search_restaurants(destination=destination)
             if live_dining:
-                total_est = sum(d.estimated_cost for d in live_dining)
+                total_est = sum(item.cost for item in live_dining)
                 return {
-                    "total_estimated": total_est,
-                    "currency": "INR",
                     "source": "Google Places",
                     "is_live": True,
-                    "items": [d.model_dump() for d in live_dining]
+                    "items": [item.model_dump() for item in live_dining],
+                    "total_estimated": float(total_est)
                 }
 
-        # Scaled Demo fallback
         dest_lower = destination.lower()
-        if "goa" in dest_lower:
-            base_items = [
-                {"name": "Beachfront Sunset Tasting at Cavatina", "type": "Dinner Tasting", "estimated_cost": 2400.0},
-                {"name": "Assagao Garden Bistro (Jamun)", "type": "Heritage Dinner", "estimated_cost": 2000.0},
-                {"name": "Fontainhas Artisanal Breakfasts & Cafés", "type": "Daily Cafés", "estimated_cost": 1600.0},
-                {"name": "Curated Beach Bar Sundowners", "type": "Cocktails & Mezze", "estimated_cost": 1000.0}
+        if "jaipur" in dest_lower:
+            items = [
+                RestaurantOption(
+                    id="din-jai-1",
+                    name="1135 AD Amber Fort",
+                    cuisine="Royal Rajasthani Fine Dining",
+                    meal_type="Dinner",
+                    price_category="Fine Dining",
+                    rating=4.9,
+                    cost=2400.0,
+                    location="Amer Fort Palace, Jaipur",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                RestaurantOption(
+                    id="din-jai-2",
+                    name="Caffé Palladio",
+                    cuisine="Heritage Mediterranean & Mezze",
+                    meal_type="Lunch",
+                    price_category="Curated",
+                    rating=4.8,
+                    cost=1600.0,
+                    location="Narain Niwas, Jaipur",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                RestaurantOption(
+                    id="din-jai-3",
+                    name="Baradari City Palace",
+                    cuisine="Contemporary Indian & High Tea",
+                    meal_type="Dinner",
+                    price_category="Fine Dining",
+                    rating=4.7,
+                    cost=2000.0,
+                    location="City Palace, Jaipur",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
             ]
-            selected_items = base_items[:max(2, duration_days)]
-            total = sum(i["estimated_cost"] for i in selected_items)
-            return {
-                "total_estimated": total,
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": selected_items
-            }
-        elif "jaipur" in dest_lower:
-            base_items = [
-                {"name": "1135 AD Amber Fort Candlelight Dinner", "type": "Royal Rajasthani Tasting", "estimated_cost": 2400.0},
-                {"name": "Caffé Palladio Garden & Mezze Lunch", "type": "Heritage Café", "estimated_cost": 1600.0},
-                {"name": "Baradari City Palace Courtyard Dining", "type": "Palace Gastronomy", "estimated_cost": 2000.0},
-                {"name": "Laxmi Mishthan Bhandar (LMB) Heritage Breakfast", "type": "Local Breakfast", "estimated_cost": 800.0}
+        elif "paris" in dest_lower:
+            items = [
+                RestaurantOption(
+                    id="din-par-1",
+                    name="Le Jules Verne (Eiffel Tower)",
+                    cuisine="Michelin Haute French Cuisine",
+                    meal_type="Dinner",
+                    price_category="Ultra Fine Dining",
+                    rating=4.9,
+                    cost=12000.0,
+                    location="Champ de Mars, Eiffel Tower, Paris",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                RestaurantOption(
+                    id="din-par-2",
+                    name="Café de Flore",
+                    cuisine="Iconic Parisian Bistro & Wine",
+                    meal_type="Lunch",
+                    price_category="Curated",
+                    rating=4.7,
+                    cost=3200.0,
+                    location="Saint-Germain-des-Prés, Paris",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                RestaurantOption(
+                    id="din-par-3",
+                    name="Girafe Paris",
+                    cuisine="Seafood & Terrace Views of Eiffel Tower",
+                    meal_type="Dinner",
+                    price_category="Fine Dining",
+                    rating=4.8,
+                    cost=7500.0,
+                    location="Place du Trocadéro, Paris",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
             ]
-            selected_items = base_items[:max(2, duration_days)]
-            total = sum(i["estimated_cost"] for i in selected_items)
-            return {
-                "total_estimated": total,
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": selected_items
-            }
+        elif "goa" in dest_lower:
+            items = [
+                RestaurantOption(
+                    id="din-1",
+                    name="Cavatina Cuchina",
+                    cuisine="Contemporary Goan Chef Tasting",
+                    meal_type="Dinner",
+                    price_category="Fine Dining",
+                    rating=4.9,
+                    cost=2400.0,
+                    location="Benaulim, Goa",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                RestaurantOption(
+                    id="din-2",
+                    name="Gunpowder Assagao",
+                    cuisine="South Indian Coastal & Cocktails",
+                    meal_type="Lunch",
+                    price_category="Casual Fine",
+                    rating=4.8,
+                    cost=1200.0,
+                    location="Assagao, North Goa",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                RestaurantOption(
+                    id="din-3",
+                    name="Jamun Goa",
+                    cuisine="Artisanal Heritage Dining",
+                    meal_type="Dinner",
+                    price_category="Fine Dining",
+                    rating=4.7,
+                    cost=2000.0,
+                    location="Assagao, North Goa",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
         else:
-            daily_rate = 1800.0
-            return {
-                "total_estimated": daily_rate * duration_days,
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": [
-                    {"name": f"Curated Chef Tasting in {destination}", "type": "Fine Dining", "estimated_cost": round(daily_rate * 0.6 * duration_days, 2)},
-                    {"name": f"Local {destination} Bistros & Breakfasts", "type": "Daily Gastronomy", "estimated_cost": round(daily_rate * 0.4 * duration_days, 2)}
-                ]
-            }
-
-    @classmethod
-    def search_activities(
-        cls,
-        destination: str,
-        duration_days: int = 4
-    ) -> Dict[str, Any]:
-        mode = cls.get_api_mode()
-
-        # Try live Google Places provider for attractions when configured
-        if mode == "live" and GooglePlacesProvider.is_configured():
-            live_acts = GooglePlacesProvider.search_attractions(
-                destination=destination,
-                duration_days=duration_days
-            )
-            if live_acts:
-                total_est = sum(a.cost for a in live_acts)
-                return {
-                    "total_estimated": total_est,
-                    "currency": "INR",
-                    "source": "Google Places",
-                    "is_live": True,
-                    "items": [a.model_dump() for a in live_acts]
-                }
-
-        # Scaled Demo fallback
-        dest_lower = destination.lower()
-        if "goa" in dest_lower:
-            base_acts = [
-                {"id": "act-1", "title": "Private Mandovi River Sunset Catamaran Cruise", "name": "Private Mandovi River Sunset Catamaran Cruise", "day": 1, "cost": 2500.0, "price": 2500.0},
-                {"id": "act-2", "title": "Fontainhas Latin Quarter Guided Architectural Walk", "name": "Fontainhas Latin Quarter Guided Architectural Walk", "day": 2, "cost": 1200.0, "price": 1200.0},
-                {"id": "act-3", "title": "Grand Island Backwaters Sea Kayaking & Snorkeling", "name": "Grand Island Backwaters Sea Kayaking & Snorkeling", "day": 3, "cost": 2000.0, "price": 2000.0},
-                {"id": "act-4", "title": "Local Spice Plantation & Spice Trail Excursion", "name": "Local Spice Plantation & Spice Trail Excursion", "day": 4, "cost": 800.0, "price": 800.0},
-                {"id": "act-5", "title": "Anjuna Coastal Cliff Yoga & Sunset Trail", "name": "Anjuna Coastal Cliff Yoga & Sunset Trail", "day": 5, "cost": 1200.0, "price": 1200.0}
+            items = [
+                RestaurantOption(
+                    id=f"din-{destination.lower()[:3]}-1",
+                    name=f"The Heritage Bistro {destination}",
+                    cuisine=f"Curated {destination} Gastronomy",
+                    meal_type="Dinner",
+                    price_category="Fine Dining",
+                    rating=4.8,
+                    cost=2200.0,
+                    location=f"Old Town, {destination}",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                RestaurantOption(
+                    id=f"din-{destination.lower()[:3]}-2",
+                    name=f"Café Promenade {destination}",
+                    cuisine="Artisanal Coffee & Local Brunch",
+                    meal_type="Lunch",
+                    price_category="Curated",
+                    rating=4.7,
+                    cost=1200.0,
+                    location=f"Central Square, {destination}",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
             ]
-            selected = base_acts[:max(1, duration_days)]
-            total = sum(a["cost"] for a in selected)
-            return {
-                "total_estimated": total,
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": selected
-            }
-        elif "jaipur" in dest_lower:
-            base_acts = [
-                {"id": "act-jai-1", "title": "Amber Fort Private Guided Heritage & Nahargarh Sunset Tour", "name": "Amber Fort & Nahargarh Sunset", "day": 1, "cost": 1800.0, "price": 1800.0},
-                {"id": "act-jai-2", "title": "City Palace & Hawa Mahal Royal Photography Walk", "name": "City Palace & Hawa Mahal Walk", "day": 2, "cost": 1200.0, "price": 1200.0},
-                {"id": "act-jai-3", "title": "Jantar Mantar & Johari Bazaar Gemstone Trail", "name": "Johari Bazaar Gemstone Trail", "day": 3, "cost": 1000.0, "price": 1000.0},
-                {"id": "act-jai-4", "title": "Elefantastic Ethical Elephant Sanctuary Excursion", "name": "Elephant Sanctuary Excursion", "day": 4, "cost": 2200.0, "price": 2200.0},
-                {"id": "act-jai-5", "title": "Galta Ji (Monkey Temple) & Stepwell Tour", "name": "Stepwell & Temple Tour", "day": 5, "cost": 900.0, "price": 900.0}
-            ]
-            selected = base_acts[:max(1, duration_days)]
-            total = sum(a["cost"] for a in selected)
-            return {
-                "total_estimated": total,
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": selected
-            }
-        else:
-            daily_act = 1200.0
-            return {
-                "total_estimated": daily_act * duration_days,
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": [
-                    {"id": "act-gen-1", "title": f"Historic Highlights & Cultural Tour of {destination}", "name": f"Historic Highlights of {destination}", "day": 1, "cost": daily_act * duration_days, "price": daily_act * duration_days}
-                ]
-            }
 
-    @classmethod
-    def search_transport(
-        cls,
-        destination: str,
-        duration_days: int = 4
-    ) -> Dict[str, Any]:
-        dest_lower = destination.lower()
-        if "goa" in dest_lower:
-            transfer_cost = 2200.0
-            local_transit = 400.0 * duration_days
-            return {
-                "total_estimated": transfer_cost + local_transit,
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": [
-                    {"type": "Airport Inbound & Outbound Executive EV Sedan (MOPA ⇄ Resort)", "estimated_cost": transfer_cost},
-                    {"type": "Local Chauffeur & Coastal Transit Credits", "estimated_cost": local_transit}
-                ]
-            }
-        elif "jaipur" in dest_lower:
-            transfer_cost = 1600.0
-            local_transit = 350.0 * duration_days
-            return {
-                "total_estimated": transfer_cost + local_transit,
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": [
-                    {"type": "Airport Inbound & Outbound Chauffeur Sedan (JAI ⇄ Haveli)", "estimated_cost": transfer_cost},
-                    {"type": "City Heritage Transit & Tuk-Tuk Pass", "estimated_cost": local_transit}
-                ]
-            }
-        else:
-            return {
-                "total_estimated": 2000.0 + (400.0 * duration_days),
-                "currency": "INR",
-                "source": "Voyage Demo Provider",
-                "is_live": False,
-                "items": [
-                    {"type": f"Airport Transfer Sedan ({destination})", "estimated_cost": 2000.0},
-                    {"type": "Local Transit Pass", "estimated_cost": 400.0 * duration_days}
-                ]
-            }
-
-    @classmethod
-    def build_provider_summary(
-        cls,
-        flights: List[FlightOption],
-        hotels: List[HotelOption],
-        dining: Dict[str, Any],
-        activities: Dict[str, Any],
-        transport: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        flight_live = bool(flights and flights[0].is_live)
-        dining_live = bool(dining.get("is_live", False))
-        act_live = bool(activities.get("is_live", False))
-
+        total_est = sum(item.cost for item in items)
         return {
-            "flights": {
-                "provider": flights[0].source if flights else "Voyage Demo Provider",
-                "is_live": flight_live
-            },
-            "restaurants": {
-                "provider": dining.get("source", "Voyage Demo Provider"),
-                "is_live": dining_live
-            },
-            "hotels": {
-                "provider": "Voyage Demo Provider",
-                "is_live": False
-            },
-            "activities": {
-                "provider": activities.get("source", "Voyage Demo Provider"),
-                "is_live": act_live
-            },
-            "transport": {
-                "provider": "Voyage Demo Provider",
-                "is_live": False
-            },
-            "any_live": flight_live or dining_live or act_live
+            "source": "Voyage Demo Provider",
+            "is_live": False,
+            "items": [item.model_dump() for item in items],
+            "total_estimated": float(total_est)
+        }
+
+    @classmethod
+    def search_activities(cls, destination: str, duration_days: int = 4) -> Dict[str, Any]:
+        mode = cls.get_api_mode()
+        if mode == "live" and GooglePlacesProvider.is_configured():
+            live_acts = GooglePlacesProvider.search_attractions(destination=destination)
+            if live_acts:
+                total_est = sum(item.cost for item in live_acts)
+                return {
+                    "source": "Google Places",
+                    "is_live": True,
+                    "items": [item.model_dump() for item in live_acts],
+                    "total_estimated": float(total_est)
+                }
+
+        dest_lower = destination.lower()
+        if "jaipur" in dest_lower:
+            items = [
+                ActivityOption(
+                    id="act-jai-1",
+                    name="Amber Fort & Nahargarh Fort Sunset Tour",
+                    category="Heritage & Culture",
+                    rating=4.9,
+                    cost=1800.0,
+                    duration="3.5 hours",
+                    location="Amer, Jaipur",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                ActivityOption(
+                    id="act-jai-2",
+                    name="City Palace & Hawa Mahal Photography Walk",
+                    category="Sightseeing & Photography",
+                    rating=4.8,
+                    cost=1200.0,
+                    duration="2.5 hours",
+                    location="Old City, Jaipur",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                ActivityOption(
+                    id="act-jai-3",
+                    name="Johari Bazaar Gemstone & Artisanal Textile Trail",
+                    category="Culture & Shopping",
+                    rating=4.7,
+                    cost=1000.0,
+                    duration="2.0 hours",
+                    location="Johari Bazaar, Jaipur",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+        elif "paris" in dest_lower:
+            items = [
+                ActivityOption(
+                    id="act-par-1",
+                    name="Louvre Museum Masterpieces VIP Tour",
+                    category="Art & History",
+                    rating=4.9,
+                    cost=4500.0,
+                    duration="3 hours",
+                    location="Louvre Museum, Paris",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                ActivityOption(
+                    id="act-par-2",
+                    name="Seine River Sunset Champagne Cruise",
+                    category="Cruise & Sightseeing",
+                    rating=4.8,
+                    cost=3200.0,
+                    duration="1.5 hours",
+                    location="Eiffel Tower Pier, Paris",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+        elif "kyoto" in dest_lower:
+            items = [
+                ActivityOption(
+                    id="act-kyo-1",
+                    name="Fushimi Inari Taisha Early Morning Shrine Walk",
+                    category="Cultural Heritage",
+                    rating=4.9,
+                    cost=1200.0,
+                    duration="3 hours",
+                    location="Fushimi Ward, Kyoto",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                ActivityOption(
+                    id="act-kyo-2",
+                    name="Arashiyama Bamboo Grove & Tenryu-ji Temple",
+                    category="Nature & Zen Gardens",
+                    rating=4.8,
+                    cost=1500.0,
+                    duration="2.5 hours",
+                    location="Arashiyama, Kyoto",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+        elif "goa" in dest_lower:
+            items = [
+                ActivityOption(
+                    id="act-1",
+                    name="Private Mandovi Catamaran Sunset Cruise",
+                    category="Yachting",
+                    rating=4.9,
+                    cost=2500.0,
+                    duration="2 hours",
+                    location="Panjim, Goa",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                ActivityOption(
+                    id="act-2",
+                    name="Fontainhas Latin Quarter Heritage Walk",
+                    category="Culture",
+                    rating=4.8,
+                    cost=1200.0,
+                    duration="2 hours",
+                    location="Panjim, Goa",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                ActivityOption(
+                    id="act-3",
+                    name="Backwaters Sea Kayaking & Snorkeling",
+                    category="Adventure",
+                    rating=4.7,
+                    cost=2000.0,
+                    duration="3 hours",
+                    location="Grand Island, Goa",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+        else:
+            items = [
+                ActivityOption(
+                    id=f"act-{destination.lower()[:3]}-1",
+                    name=f"Historic Highlights & Landmark Walk in {destination}",
+                    category="Sightseeing & Culture",
+                    rating=4.8,
+                    cost=1500.0,
+                    duration="2.5 hours",
+                    location=f"{destination}",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                ActivityOption(
+                    id=f"act-{destination.lower()[:3]}-2",
+                    name=f"Sunset Panorama & Photography Excursion",
+                    category="Experiences",
+                    rating=4.7,
+                    cost=1200.0,
+                    duration="2.0 hours",
+                    location=f"{destination}",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+
+        total_est = sum(item.cost for item in items)
+        return {
+            "source": "Voyage Demo Provider",
+            "is_live": False,
+            "items": [item.model_dump() for item in items],
+            "total_estimated": float(total_est)
+        }
+
+    @classmethod
+    def search_transport(cls, destination: str, duration_days: int = 4) -> Dict[str, Any]:
+        dest_lower = destination.lower()
+        if "jaipur" in dest_lower:
+            items = [
+                TransportOption(
+                    id="trn-jai-1",
+                    name="Airport Chauffeur Sedan (JAI)",
+                    vehicle_type="Chauffeur Sedan",
+                    cost=800.0,
+                    duration="45 mins",
+                    route="Jaipur Airport (JAI) ⇄ Hotel",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                TransportOption(
+                    id="trn-jai-2",
+                    name="Jaipur Heritage City Day Cab",
+                    vehicle_type="Private SUV",
+                    cost=1600.0,
+                    duration="Full Day",
+                    route="Old City & Amer Fort Exploration",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+        elif "goa" in dest_lower:
+            items = [
+                TransportOption(
+                    id="trn-1",
+                    name="Airport Executive EV Sedan",
+                    vehicle_type="Electric Sedan",
+                    cost=1100.0,
+                    duration="45 mins",
+                    route="Airport ⇄ Resort",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                ),
+                TransportOption(
+                    id="trn-2",
+                    name="North Goa Day Chauffeur Pass",
+                    vehicle_type="SUV",
+                    cost=1500.0,
+                    duration="Full Day",
+                    route="Assagao, Morjim, Vagator Circuit",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+        else:
+            items = [
+                TransportOption(
+                    id=f"trn-{destination.lower()[:3]}-1",
+                    name=f"Airport Executive Transfer ({destination})",
+                    vehicle_type="Chauffeur Sedan",
+                    cost=1000.0,
+                    duration="45 mins",
+                    route=f"Airport ⇄ {destination}",
+                    source="Voyage Demo Provider",
+                    is_live=False
+                )
+            ]
+
+        total_est = sum(item.cost for item in items)
+        return {
+            "source": "Voyage Demo Provider",
+            "is_live": False,
+            "items": [item.model_dump() for item in items],
+            "total_estimated": float(total_est)
         }

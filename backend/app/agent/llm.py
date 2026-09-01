@@ -9,12 +9,13 @@ _llm_initialized: bool = False
 
 def get_google_api_key() -> Optional[str]:
     """Retrieves Google Gemini API key from environment."""
-    return os.getenv("GOOGLE_API_KEY")
+    key = os.getenv("GOOGLE_API_KEY")
+    return key.strip() if key else None
 
 def is_llm_enabled() -> bool:
     """Returns True only if GOOGLE_API_KEY is configured."""
     key = get_google_api_key()
-    return bool(key and key.strip())
+    return bool(key)
 
 def get_gemini_model() -> Optional[Any]:
     """

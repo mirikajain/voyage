@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, ArrowUpRight, CheckCircle, Sparkles, MapPin } from 'lucide-react';
+import { Calendar, ArrowUpRight, CheckCircle, Sparkles, MapPin, Check } from 'lucide-react';
 import type { Trip } from '../../types';
 import { useApp } from '../../context/AppContext';
 
@@ -16,6 +16,13 @@ export const TripCard: React.FC<TripCardProps> = ({ trip }) => {
 
   const getStatusBadge = () => {
     switch (trip.status) {
+      case 'Booked':
+        return (
+          <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-600 text-white shadow-soft-xs backdrop-blur-md">
+            <Check className="w-3 h-3 text-white" />
+            BOOKED
+          </span>
+        );
       case 'Upcoming':
         return (
           <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/90 text-white shadow-soft-xs backdrop-blur-md">
@@ -85,6 +92,13 @@ export const TripCard: React.FC<TripCardProps> = ({ trip }) => {
           </div>
           <span className="text-[11px] text-voyage-muted italic">{trip.travelVibe}</span>
         </div>
+
+        {trip.bookingReference && (
+          <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60 flex items-center justify-between text-xs">
+            <span className="text-emerald-800 font-medium">Booking Reference:</span>
+            <span className="font-mono font-bold text-emerald-900">{trip.bookingReference}</span>
+          </div>
+        )}
 
         {/* Budget Progress Bar */}
         <div className="space-y-2 pt-1">

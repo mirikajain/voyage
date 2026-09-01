@@ -1,6 +1,7 @@
 /**
  * Voyage AI Agent Backend API Client
- * Connects the React Frontend to the Python FastAPI + LangGraph Agent Backend (Real Travel APIs + Gemini)
+ * Connects the React Frontend to the Python FastAPI + LangGraph Agent Backend
+ * Supports Real Travel APIs, Gemini Reasoning, Spend Guardrails, and Razorpay Checkout
  */
 
 export interface BackendStepProgress {
@@ -32,6 +33,8 @@ export interface BackendCostBreakdown {
   hotel_is_live?: boolean;
   travel_source?: string;
   travel_is_live?: boolean;
+  budget_envelopes?: Record<string, number>;
+  category_status?: Record<string, string>;
 }
 
 export interface BackendItineraryItem {
@@ -56,25 +59,101 @@ export interface BackendApprovalRequest {
   item: string;
   amount: number;
   currency: string;
+  payment_reference: string;
+  requires_approval: boolean;
+  approval_reason: string;
+  budget?: number | null;
+  remaining_buffer: number;
+  gateway?: string;
+}
+
+export interface BackendSearchResults {
+  type: string;
+  query_title: string;
+  items: any[];
+  total_count: number;
+  provider: string;
+  is_live: boolean;
+}
+
+export interface BackendRazorpayOrder {
+  order_id: string;
+  amount_in_paise: number;
+  amount_in_rupees: number;
+  currency: string;
+  status: string;
+  payment_reference: string;
+  key_id?: string;
+  mode: string;
+  merchant_name?: string;
+  notes?: Record<string, any>;
+}
+
+export interface BackendPaymentConfirmation {
+  payment_id: string;
+  order_id: string;
+  payment_reference: string;
+  booking_reference: string;
+  amount: number;
+  currency: string;
+  status: 'paid' | 'failed' | 'cancelled';
+  timestamp: string;
+  method: string;
+  receipt?: string;
+}
+
+export interface BackendSpendGuardrailResult {
+  allowed: boolean;
+  requires_approval: boolean;
+  reason: string;
+  budget_ceiling?: number | null;
+  requested_amount: number;
+  remaining_buffer: number;
+  is_budget_exceeded: boolean;
+  autonomous_limit: number;
+  ask_before_purchase: boolean;
 }
 
 export interface BackendAgentResponse {
   thread_id: string;
-  status: 'completed' | 'budget_warning' | 'in_progress' | 'error';
-  destination: string;
-  duration_days: number;
+  status: 'completed' | 'needs_input' | 'budget_warning' | 'awaiting_approval' | 'in_progress' | 'error';
+  intent: 'trip_planning' | 'flight_search' | 'hotel_search' | 'restaurant_search' | 'activity_search' | 'transport_search' | 'general_travel';
+  destination?: string | null;
+  origin?: string | null;
+  departure_date?: string | null;
+  return_date?: string | null;
+  duration_days?: number | null;
+  travelers?: number | null;
   budget?: number | null;
+  budget_envelopes?: Record<string, number>;
+  category_status?: Record<string, string>;
   currency: string;
-  estimated_total: number;
-  remaining_budget: number;
-  breakdown: BackendCostBreakdown;
-  reasons: string[];
-  itinerary: BackendItineraryDay[];
+  estimated_total?: number | null;
+  remaining_budget?: number | null;
+  breakdown?: BackendCostBreakdown | null;
+  reasons?: string[];
+  itinerary?: BackendItineraryDay[];
+  search_results?: BackendSearchResults | null;
   agent_events: BackendAgentEvent[];
   step_progress: BackendStepProgress[];
   provider_summary?: Record<string, any>;
+  
+  // Conversational Clarification Layer
+  missing_fields?: string[] | null;
+  question?: string | null;
+
+  // Financial & Approval Layer
   requires_approval: boolean;
+  approval_status?: 'pending' | 'approved' | 'rejected' | 'blocked_by_guardrails' | null;
   approval_request?: BackendApprovalRequest | null;
+  payment_status: 'not_started' | 'awaiting_approval' | 'approved' | 'paid' | 'failed' | 'cancelled' | 'rejected';
+  booking_status?: 'not_started' | 'processing' | 'confirmed' | 'failed' | null;
+  payment_amount?: number | null;
+  payment_reference?: string | null;
+  payment_order?: BackendRazorpayOrder | null;
+  payment_confirmation?: BackendPaymentConfirmation | null;
+  spend_guardrail_result?: BackendSpendGuardrailResult | null;
+  
   is_budget_exceeded: boolean;
   compromise_message?: string;
   data_source_notice: string;
@@ -108,28 +187,156 @@ export async function runAgent(
   return response.json();
 }
 
-export async function getAgentState(threadId: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/${threadId}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch thread state for ${threadId}`);
-  }
-  return response.json();
-}
-
-export async function resumeAgent(
+export async function resumeAgentApproval(
   threadId: string,
-  approval: { action: string; approved: boolean }
-): Promise<any> {
+  approved: boolean,
+  simulateFailure: boolean = false
+): Promise<BackendAgentResponse> {
   const response = await fetch(`${API_BASE_URL}/${threadId}/resume`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(approval),
+    body: JSON.stringify({
+      approved,
+      simulate_failure: simulateFailure,
+    }),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to resume agent thread ${threadId}`);
+    const errText = await response.text();
+    throw new Error(`Failed to resume agent approval (${response.status}): ${errText}`);
   }
+
   return response.json();
 }
+
+export async function approveAgentWorkflow(
+  threadId: string
+): Promise<BackendAgentResponse> {
+  const response = await fetch(`${API_BASE_URL}/${threadId}/approve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to approve workflow (${response.status}): ${errText}`);
+  }
+
+  return response.json();
+}
+
+export async function rejectAgentWorkflow(
+  threadId: string
+): Promise<BackendAgentResponse> {
+  const response = await fetch(`${API_BASE_URL}/${threadId}/reject`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to reject workflow (${response.status}): ${errText}`);
+  }
+
+  return response.json();
+}
+
+export async function createPaymentOrder(payload: {
+  amount: number;
+  currency?: string;
+  thread_id?: string;
+  receipt?: string;
+  notes?: Record<string, any>;
+}): Promise<{
+  order_id: string;
+  amount_in_paise: number;
+  amount_in_rupees: number;
+  currency: string;
+  status: string;
+  key_id?: string;
+  mode?: string;
+  merchant_name?: string;
+}> {
+  const response = await fetch('/api/payment/create-order', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to create payment order (${response.status}): ${errText}`);
+  }
+
+  return response.json();
+}
+
+export async function verifyPaymentSignature(payload: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  thread_id?: string;
+  amount?: number;
+  currency?: string;
+}): Promise<{
+  verified: boolean;
+  status: string;
+  booking_status: string;
+  message: string;
+  payment_id: string;
+  order_id: string;
+  booking_reference?: string;
+  agent_response?: BackendAgentResponse;
+}> {
+  const response = await fetch('/api/payment/verify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Payment verification failed (${response.status}): ${errText}`);
+  }
+
+  return response.json();
+}
+
+export async function confirmPayment(
+  threadId: string,
+  payload: {
+    order_id: string;
+    payment_id: string;
+    payment_reference?: string;
+    amount: number;
+    currency?: string;
+    status?: string;
+  }
+): Promise<BackendAgentResponse> {
+  const response = await fetch(`${API_BASE_URL}/${threadId}/confirm_payment`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to confirm payment (${response.status}): ${errText}`);
+  }
+
+  return response.json();
+}
+
+

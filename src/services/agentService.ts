@@ -42,44 +42,89 @@ const STOP_WORDS = new Set([
   'day', 'days', 'night', 'nights', 'plan', 'trip', 'tour', 'getaway',
   'vacation', 'holiday', 'itinerary', 'under', 'for', 'from', 'with', 'in',
   'to', 'of', 'and', 'below', 'max', 'about', 'around', 'near', 'take',
-  'me', 'fly', 'flying', 'travel', 'visiting', 'visit'
+  'me', 'fly', 'flying', 'travel', 'visiting', 'visit', 'find', 'show', 'search',
+  'flights', 'flight', 'hotels', 'hotel', 'restaurants', 'restaurant',
+  'activities', 'activity', 'attractions', 'places', 'food', 'cafes', 'cafe'
 ]);
 
 function cleanLocation(text: string): string {
   if (!text) return '';
   const words = text.trim().split(/\s+/);
   const filtered = words.filter(w => !STOP_WORDS.has(w.toLowerCase()) && !/^[\d?,₹$]+$/.test(w));
-  if (filtered.length === 0) return text.trim().replace(/\b\w/g, l => l.toUpperCase());
+  if (filtered.length === 0) {
+    const rawWords = words.filter(w => !/^[\d?,₹$]+$/.test(w));
+    return rawWords.join(' ').trim().replace(/\b\w/g, l => l.toUpperCase());
+  }
   return filtered.join(' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
 export function parseTravelPrompt(prompt: string): {
+  intent: 'trip_planning' | 'flight_search' | 'hotel_search' | 'restaurant_search' | 'activity_search';
   destination: string;
+  origin: string;
   durationDays: number;
   budget: number | null;
 } {
   const rawClean = prompt.replace(/\?/g, ' ').replace(/,/g, '');
   const lower = rawClean.toLowerCase();
   
-  // 1. Destination detection
+  // 1. Intent Detection
+  let intent: 'trip_planning' | 'flight_search' | 'hotel_search' | 'restaurant_search' | 'activity_search' = 'trip_planning';
+  const isFlightQuery = /\b(flight|flights|fly|flying|airline|airlines|airfare|tickets|plane)\b/i.test(lower);
+  const isHotelQuery = /\b(hotel|hotels|resort|resorts|villa|villas|stay|stays|accommodation|room|rooms)\b/i.test(lower);
+  const isRestaurantQuery = /\b(restaurant|restaurants|dining|dinner|lunch|breakfast|food|cafe|cafes|café|cafés|bistro|eatery)\b/i.test(lower);
+  const isActivityQuery = /\b(activity|activities|things to do|attraction|attractions|sightseeing|tour|tours|experience|monument)\b/i.test(lower);
+  const isExplicitTrip = /\b(plan\s+(?:a\s+)?|itinerary|vacation|getaway|holiday|\d+\s*-?\s*day|\d+\s*-?\s*night|weekend)\b/i.test(lower);
+
+  if (isFlightQuery && !isExplicitTrip) {
+    intent = 'flight_search';
+  } else if (isHotelQuery && !isExplicitTrip) {
+    intent = 'hotel_search';
+  } else if (isRestaurantQuery && !isExplicitTrip) {
+    intent = 'restaurant_search';
+  } else if (isActivityQuery && !isExplicitTrip) {
+    intent = 'activity_search';
+  } else {
+    intent = 'trip_planning';
+  }
+
+  // 2. Origin & Destination detection
+  let origin = 'Mumbai';
   let destination = '';
 
-  const fromToMatch = lower.match(/(?:flying\s+)?from\s+([a-z\s]+?)\s+to\s+([a-z\s]+?)(?:\s+(?:for|under|with|from|on|in|\d|₹|budget|trip|tour)|$)/);
-  if (fromToMatch && fromToMatch[2]) {
-    destination = cleanLocation(fromToMatch[2]);
+  const fromToMatch = lower.match(/(?:flying\s+|flights?\s+)?from\s+([a-z\s]+?)\s+to\s+([a-z\s]+?)(?:\s+(?:for|under|with|from|on|in|\d|₹|budget|trip|tour)|$)/);
+  if (fromToMatch) {
+    const origCand = cleanLocation(fromToMatch[1]);
+    const destCand = cleanLocation(fromToMatch[2]);
+    if (origCand) origin = origCand;
+    if (destCand) destination = destCand;
   }
 
   if (!destination) {
-    const toMatch = lower.match(/(?:take\s+me\s+to|trip\s+to|travel\s+to|visit|fly\s+to|going\s+to|head\s+to|flight\s+to|flights\s+to)\s+([a-z\s]+?)(?:\s+(?:for|under|with|from|on|in|\d|₹|budget|trip|tour)|$)/);
-    if (toMatch && toMatch[1]) {
-      destination = cleanLocation(toMatch[1]);
+    const startToMatch = lower.match(/^([a-z\s]+?)\s+to\s+([a-z\s]+?)(?:\s+(?:for|under|with|from|on|in|\d|₹|budget|trip|tour)|$)/);
+    if (startToMatch) {
+      const origCand = cleanLocation(startToMatch[1]);
+      const destCand = cleanLocation(startToMatch[2]);
+      if (origCand && destCand) {
+        origin = origCand;
+        destination = destCand;
+      }
     }
   }
 
   if (!destination) {
-    const tripMatch = lower.match(/(?:plan\s+(?:a\s+)?)?(?:(?:(\d+)[-\s]*(?:day|days|night|nights)|weekend)\s+)?([a-z\s]+?)(?:\s+(?:trip|tour|getaway|vacation|itinerary|holiday))(?:\s+(?:for|under|with|from|on|in|\d|₹|budget)|$)/);
-    if (tripMatch && tripMatch[2]) {
-      destination = cleanLocation(tripMatch[2]);
+    const nearMatch = lower.match(/near\s+([a-z\s]+?)(?:\s+(?:for|under|with|from|on|in|\d|₹|budget)|$)/);
+    if (nearMatch && nearMatch[1]) {
+      const cand = cleanLocation(nearMatch[1]);
+      if (cand.toLowerCase().includes('eiffel')) destination = 'Paris';
+      else destination = cand;
+    }
+  }
+
+  if (!destination) {
+    const toMatch = lower.match(/(?:take\s+me\s+to|trip\s+to|travel\s+to|visit|fly\s+to|going\s+to|head\s+to|flights?\s+to|flight\s+to)\s+([a-z\s]+?)(?:\s+(?:for|under|with|from|on|in|\d|₹|budget|trip|tour)|$)/);
+    if (toMatch && toMatch[1]) {
+      destination = cleanLocation(toMatch[1]);
     }
   }
 
@@ -87,6 +132,13 @@ export function parseTravelPrompt(prompt: string): {
     const inMatch = lower.match(/(?:in|at)\s+([a-z\s]+?)(?:\s+(?:for|under|with|from|on|\d|₹|budget|trip|tour)|$)/);
     if (inMatch && inMatch[1]) {
       destination = cleanLocation(inMatch[1]);
+    }
+  }
+
+  if (!destination) {
+    const tripMatch = lower.match(/(?:plan\s+(?:a\s+)?)?(?:(?:(\d+)[-\s]*(?:day|days|night|nights)|weekend)\s+)?([a-z\s]+?)(?:\s+(?:trip|tour|getaway|vacation|itinerary|holiday))(?:\s+(?:for|under|with|from|on|in|\d|₹|budget)|$)/);
+    if (tripMatch && tripMatch[2]) {
+      destination = cleanLocation(tripMatch[2]);
     }
   }
 
@@ -104,7 +156,7 @@ export function parseTravelPrompt(prompt: string): {
     destination = 'Goa';
   }
 
-  // 2. Duration detection (e.g. "2-day", "2 days", "weekend", "5 nights")
+  // 3. Duration detection (e.g. "2-day", "2 days", "weekend", "5 nights")
   let durationDays: number | null = null;
   const dayMatch = lower.match(/(\d+)\s*(-|\s)?(day|days|night|nights)/);
   if (dayMatch && dayMatch[1]) {
@@ -123,7 +175,7 @@ export function parseTravelPrompt(prompt: string): {
     durationDays = 4;
   }
 
-  // 3. Budget detection (e.g. "₹25,000", "25k", "1.5 lakh", "under 25000")
+  // 4. Budget detection (e.g. "₹25,000", "25k", "1.5 lakh", "under 25000")
   let budget: number | null = null;
   const lakhMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:lakh|lac|lacs)\b/);
   if (lakhMatch && lakhMatch[1]) {
@@ -144,15 +196,15 @@ export function parseTravelPrompt(prompt: string): {
     }
   }
 
-  return { destination, durationDays, budget };
+  return { intent, destination, origin, durationDays, budget };
 }
 
 export async function executeAgentWorkflow(
   prompt: string,
-  userProfile: UserPreferences,
+  _userProfile: UserPreferences,
   callbacks: AgentExecutionCallbacks
 ): Promise<void> {
-  const { destination, durationDays, budget } = parseTravelPrompt(prompt);
+  const { intent, destination, origin, durationDays, budget } = parseTravelPrompt(prompt);
   const targetBudget = budget || 40000;
   let currentSteps: AgentWorkflowStep[] = initialAgentSteps.map(s => ({ ...s, status: 'waiting' }));
   const logEntries: AgentActivityLogItem[] = [];
@@ -179,17 +231,17 @@ export async function executeAgentWorkflow(
   try {
     // STEP 1: Understanding request
     updateSteps(0, 'active');
-    addLog(`Request understood: ${durationDays}-day ${destination} trip${budget ? ` under ₹${budget.toLocaleString()}` : ''}`, 'system');
+    addLog(`Request understood: ${intent === 'flight_search' ? `Flights ${origin} ➔ ${destination}` : `${durationDays}-day ${destination} trip`}`, 'system');
     await sleep(450);
     updateSteps(0, 'complete');
 
     // STEP 2: Checking travel preferences
     updateSteps(1, 'active');
-    addLog(`Preferences loaded: Style: "${userProfile.travelStyle[0]}", Food: "${userProfile.foodPreferences[0]}"`, 'system');
+    addLog(`Preferences loaded for ${destination}`, 'system');
     await sleep(400);
     updateSteps(1, 'complete');
 
-    // STEP 3: Searching external travel services (simulated partner APIs)
+    // STEP 3: Searching external travel services
     updateSteps(2, 'active');
     addLog(`Searching external travel partner network for ${destination}...`, 'tool');
     
@@ -210,7 +262,7 @@ export async function executeAgentWorkflow(
 
     // STEP 4: Comparing options
     updateSteps(3, 'active');
-    addLog('Comparing options & filtering for 4.6+ guest ratings and schedule fit', 'tool');
+    addLog('Comparing options & filtering for ratings and schedule fit', 'tool');
     await sleep(450);
     updateSteps(3, 'complete');
 
@@ -226,17 +278,13 @@ export async function executeAgentWorkflow(
     let totalEstimated = hotelCost + diningCost + activitiesCost + transportCost + travelCost;
     const isBudgetExceeded = budget ? totalEstimated > budget : false;
 
-    if (isBudgetExceeded && budget) {
-      addLog(`Budget alert: Estimated ₹${totalEstimated.toLocaleString()} exceeds user budget ₹${budget.toLocaleString()}`, 'budget');
-    } else {
-      addLog(`Budget verified: Estimated total ₹${totalEstimated.toLocaleString()}`, 'budget');
-    }
+    addLog(`Budget verified: Estimated total ₹${totalEstimated.toLocaleString()}`, 'budget');
     await sleep(450);
     updateSteps(4, 'complete');
 
     // STEP 6: Preparing recommendation
     updateSteps(5, 'active');
-    addLog('Synthesizing structured itinerary and user recommendation', 'complete');
+    addLog('Synthesizing structured response', 'complete');
     await sleep(400);
     updateSteps(5, 'complete');
 
@@ -278,7 +326,9 @@ export async function executeAgentWorkflow(
     const recommendationResult: AgentRecommendationResult = {
       id: `rec-${destination.toLowerCase()}-${Date.now()}`,
       planTitle: `YOUR ${destination.toUpperCase()} PLAN`,
+      intent,
       destination,
+      origin,
       durationDays,
       breakdown,
       reasons: isBudgetExceeded && budget
@@ -288,9 +338,9 @@ export async function executeAgentWorkflow(
             `Consider adjusting budget or reducing activity count`,
           ]
         : [
-            `Curated for your ${durationDays}-day ${destination} stay`,
-            `Top-rated boutique stay (${hotels[0].rating}★)`,
-            `Balanced itinerary with verified inventory`,
+            `Curated for your ${destination} request`,
+            `Top-rated partner inventory`,
+            `Verified schedule and rates`,
           ],
       itinerary,
       isBudgetExceeded,

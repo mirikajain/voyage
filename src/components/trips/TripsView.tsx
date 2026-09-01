@@ -8,7 +8,7 @@ export const TripsView: React.FC = () => {
   const { trips, triggerAIPromptFromAnywhere } = useApp();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
 
-  const upcomingTrips = trips.filter(t => t.status === 'Upcoming' || t.status === 'Active Planning');
+  const upcomingTrips = trips.filter(t => t.status === 'Upcoming' || t.status === 'Active Planning' || t.status === 'Booked');
   const pastTrips = trips.filter(t => t.status === 'Past');
 
   const displayedTrips = activeTab === 'upcoming' ? upcomingTrips : pastTrips;
@@ -51,7 +51,7 @@ export const TripsView: React.FC = () => {
               : 'text-voyage-muted hover:text-voyage-dark hover:bg-voyage-bg'
           }`}
         >
-          Upcoming & Planning ({upcomingTrips.length})
+          Upcoming & Booked ({upcomingTrips.length})
         </button>
         <button
           onClick={() => setActiveTab('past')}

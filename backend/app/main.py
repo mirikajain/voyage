@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.api.agent import router as agent_router
+from app.api.payment import router as payment_router
 
 app = FastAPI(
     title="Voyage AI Concierge & Financial Backend",
@@ -23,7 +24,10 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(agent_router, prefix="/api")
 app.include_router(agent_router)
+app.include_router(payment_router, prefix="/api")
+app.include_router(payment_router)
 
 @app.get("/")
 async def root():

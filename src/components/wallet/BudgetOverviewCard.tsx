@@ -1,11 +1,13 @@
 import React from 'react';
 import { ShieldCheck } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
 export const BudgetOverviewCard: React.FC = () => {
-  const spent = 132400;
-  const total = 150000;
-  const remaining = total - spent;
-  const percentage = Math.round((spent / total) * 100);
+  const { userProfile } = useApp();
+  const spent = userProfile.totalSpent || 132400;
+  const total = userProfile.totalBudget || 200000;
+  const remaining = Math.max(0, total - spent);
+  const percentage = Math.min(100, Math.round((spent / total) * 100));
 
   return (
     <div className="bg-white rounded-3xl p-6 sm:p-8 border border-voyage-border/80 shadow-soft-sm relative overflow-hidden space-y-6">
@@ -19,10 +21,10 @@ export const BudgetOverviewCard: React.FC = () => {
             <span className="text-[11px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-voyage-dark text-voyage-gold">
               Active Envelope
             </span>
-            <span className="text-xs text-voyage-muted font-medium">Paris Autumn Trip</span>
+            <span className="text-xs text-voyage-muted font-medium">Voyage Travel Ledger</span>
           </div>
           <h2 className="font-serif-luxury text-3xl sm:text-4xl font-bold tracking-tight text-voyage-dark">
-            Paris Trip Budget
+            Portfolio Spend & Budget
           </h2>
         </div>
 
@@ -41,7 +43,7 @@ export const BudgetOverviewCard: React.FC = () => {
           <p className="font-serif-luxury text-3xl font-bold text-voyage-dark mt-1">
             ₹{spent.toLocaleString()}
           </p>
-          <span className="text-[11px] text-voyage-muted">88.3% of target ceiling</span>
+          <span className="text-[11px] text-voyage-muted">{percentage}% of target envelope</span>
         </div>
 
         <div>
@@ -61,7 +63,7 @@ export const BudgetOverviewCard: React.FC = () => {
           <p className="font-serif-luxury text-3xl font-bold text-emerald-700 mt-1">
             ₹{remaining.toLocaleString()}
           </p>
-          <span className="text-[11px] text-emerald-600 font-medium">Available for Days 5–7</span>
+          <span className="text-[11px] text-emerald-600 font-medium">Available for new trips</span>
         </div>
       </div>
 
@@ -81,7 +83,7 @@ export const BudgetOverviewCard: React.FC = () => {
 
         <div className="flex items-center justify-between text-[11px] text-voyage-muted">
           <span>₹0</span>
-          <span>Target: ₹1,50,000</span>
+          <span>Target: ₹{total.toLocaleString()}</span>
         </div>
       </div>
     </div>
