@@ -1,7 +1,6 @@
 import React from 'react';
 import { useApp } from './context/AppContext';
-import { Sidebar } from './components/layout/Sidebar';
-import { MobileNav } from './components/layout/MobileNav';
+import { TopNavbar } from './components/layout/TopNavbar';
 import { GlobalAIModal } from './components/layout/GlobalAIModal';
 import { FloatingAIButton } from './components/layout/FloatingAIButton';
 import { RazorpayCheckoutModal } from './components/common/RazorpayCheckoutModal';
@@ -36,20 +35,14 @@ export const MainContent: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-voyage-bg text-voyage-dark font-sans">
-      {/* Desktop Persistent Sidebar */}
-      <Sidebar />
+    <div className="min-h-screen bg-voyage-bg text-voyage-dark font-sans flex flex-col transition-colors duration-300">
+      {/* Compact Horizontal Top Navigation */}
+      <TopNavbar />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile Navigation Header */}
-        <MobileNav />
-
-        {/* Dynamic Page Container */}
-        <main className="flex-1 px-4 sm:px-8 lg:px-12 py-6 sm:py-8 overflow-y-auto max-w-7xl w-full mx-auto">
-          {renderCurrentView()}
-        </main>
-      </div>
+      {/* Dynamic Main Dashboard Container */}
+      <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl w-full mx-auto">
+        {renderCurrentView()}
+      </main>
 
       {/* Global Floating AI Trigger Button */}
       <FloatingAIButton />

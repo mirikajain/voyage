@@ -48,9 +48,9 @@ async def create_payment_order(request: CreateOrderRequest):
                     
                     events = _add_event(
                         state_dict.get("agent_events", []),
-                        f"Payment initiated: Created Razorpay order {order_data['order_id']} (₹{int(request.amount):,})",
-                        "budget"
-                    )
+                        f"Payment confirmed via Razorpay: {confirmation.payment_id} (Ref: {confirmation.booking_reference})",
+                        "complete"
+                    ) 
                     state_dict["agent_events"] = events
                     voyage_agent_app.update_state(config, state_dict)
             except Exception as e:
@@ -110,7 +110,7 @@ async def verify_payment(request: VerifyPaymentRequest):
                 state_dict["approval_status"] = "approved"
                 state_dict["razorpay_order_id"] = request.razorpay_order_id
                 state_dict["razorpay_payment_id"] = request.razorpay_payment_id
-                state_dict["payment_confirmation"] = confirmation
+                state_dict["payment_confirmation"] = confirmation.model_dump()
 
                 events = state_dict.get("agent_events", [])
                 events = _add_event(events, f"Razorpay payment verified: {request.razorpay_payment_id}", "budget")

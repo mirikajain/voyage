@@ -409,6 +409,10 @@ export async function resolveDisruption(
   payload: {
     approved: boolean;
     selected_replacement_id?: string;
+    payment_id?: string;
+    order_id?: string;
+    payment_status?: string;
+    payment_amount?: number;
   }
 ): Promise<BackendAgentResponse> {
   const response = await fetch(`${API_BASE_URL}/${threadId}/resolve-disruption`, {

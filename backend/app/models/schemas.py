@@ -116,6 +116,10 @@ class SimulateDisruptionRequest(BaseModel):
 class ResolveDisruptionRequest(BaseModel):
     approved: bool = Field(True, description="Whether user approved or rejected the recovery plan")
     selected_replacement_id: Optional[str] = Field(None, description="Optional alternative replacement selected by user")
+    payment_id: Optional[str] = Field(None, description="Razorpay verified payment ID")
+    order_id: Optional[str] = Field(None, description="Razorpay order ID")
+    payment_status: Optional[str] = Field(None, description="Payment status e.g. paid")
+    payment_amount: Optional[float] = Field(None, description="Payment amount verified")
 
 class DisruptionItemChangeSchema(BaseModel):
     item_id: Optional[str] = None

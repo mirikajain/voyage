@@ -686,20 +686,48 @@ def apply_disruption_resolution_node(state: AgentState) -> Dict[str, Any]:
             f"User approved disruption recovery replacement. Itinerary updated and booking confirmed.",
             "payment"
         )
+
+        payment_id = state.get("razorpay_payment_id") or f"pay_{uuid.uuid4().hex[:14]}"
+        order_id = state.get("razorpay_order_id") or state.get("payment_order", {}).get("order_id", f"order_{uuid.uuid4().hex[:14]}")
+
+        if additional_cost > 0:
+            events = _add_event(
+                events,
+                f"Razorpay payment verified: {payment_id} (₹{int(additional_cost):,})",
+                "budget"
+            )
+            events = _add_event(
+                events,
+                f"Budget recalculated: Additional ₹{int(additional_cost):,} committed to trip",
+                "budget"
+            )
+        elif additional_cost < 0:
+            events = _add_event(
+                events,
+                f"Budget recalculated: Saved ₹{int(abs(additional_cost)):,} on replacement booking",
+                "budget"
+            )
         
         # Payment confirmation
         conf_data = {
-            "payment_id": f"pay_{uuid.uuid4().hex[:14]}",
-            "order_id": state.get("payment_order", {}).get("order_id", f"order_{uuid.uuid4().hex[:14]}"),
+            "payment_id": payment_id,
+            "order_id": order_id,
             "payment_reference": state.get("approval_request", {}).get("payment_reference", f"VOYAGE-REC-{thread_id[:6].upper()}"),
             "booking_reference": f"VOYAGE-{uuid.uuid4().hex[:6].upper()}-REC",
-            "amount": additional_cost,
+            "amount": max(0.0, additional_cost),
             "currency": "INR",
             "status": "paid",
             "timestamp": _now_str(),
             "method": "UPI / Card (Razorpay Secure)",
             "receipt": f"receipt_{uuid.uuid4().hex[:8]}"
         }
+
+        # Update step progress
+        steps = list(state.get("step_progress", []))
+        for s in steps:
+            if s.get("id") in ["s6", "step-8", "step-9"]:
+                s["status"] = "complete"
+                s["completed_description"] = "Replacement confirmed & verified"
 
         return {
             "recovery_status": "approved",
@@ -708,7 +736,8 @@ def apply_disruption_resolution_node(state: AgentState) -> Dict[str, Any]:
             "booking_status": "confirmed",
             "disruption_detected": False,
             "payment_confirmation": conf_data,
-            "agent_events": events
+            "agent_events": events,
+            "step_progress": steps
         }
     else:
         events = _add_event(

@@ -577,6 +577,12 @@ async def resolve_disruption_endpoint(thread_id: str, request: ResolveDisruption
             raise HTTPException(status_code=404, detail="Active trip thread not found")
 
         state_dict["approval_status"] = "approved" if request.approved else "rejected"
+        if request.payment_id:
+            state_dict["razorpay_payment_id"] = request.payment_id
+        if request.order_id:
+            state_dict["razorpay_order_id"] = request.order_id
+        if request.payment_status:
+            state_dict["payment_status"] = request.payment_status
 
         from app.agent.disruption_graph import apply_disruption_resolution_node
         resolved = apply_disruption_resolution_node(state_dict)

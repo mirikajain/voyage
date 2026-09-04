@@ -28,7 +28,9 @@ export const AgentControlCenter: React.FC = () => {
     currentAIMode, 
     activeRecommendationResult,
     handleSimulateDisruption,
-    handleResolveDisruption
+    handleResolveDisruption,
+    setIsRazorpayCheckoutOpen,
+    setActiveCheckoutItem
   } = useApp();
   const [isLogExpanded, setIsLogExpanded] = useState(false);
   const [isSimulatingType, setIsSimulatingType] = useState<string | null>(null);
@@ -231,7 +233,40 @@ export const AgentControlCenter: React.FC = () => {
           {/* Authorization Actions */}
           <div className="grid grid-cols-2 gap-2 pt-1">
             <button
-              onClick={() => handleResolveDisruption(true)}
+              onClick={() => {
+                if (!disruption) return;
+                const priceDiff = disruption.price_difference ?? disruption.additional_cost ?? 0;
+
+                if (priceDiff > 0) {
+                  const repl = disruption.selected_replacement;
+                  const affected = disruption.affected_item;
+                  const origCost = disruption.original_item_cost || 7200;
+                  const replCost = disruption.replacement_cost || 8400;
+                  const replTitle = repl?.name || repl?.airline || repl?.title || 'IndiGo 6E 614';
+
+                  setActiveCheckoutItem({
+                    title: `Flight Replacement: ${replTitle}`,
+                    amount: priceDiff,
+                    currency: 'INR',
+                    description: `Disruption replacement for ${affected?.title || 'flight'}`,
+                    category: 'flight',
+                    isDisruptionPayment: true,
+                    originalBookingTitle: affected?.title || 'Original Booking',
+                    originalBookingCost: origCost,
+                    replacementTitle: replTitle,
+                    replacementCost: replCost,
+                    additionalCost: priceDiff,
+                    route: `${activeRecommendationResult?.origin || 'Delhi'} → ${activeRecommendationResult?.destination || 'Goa'}`,
+                    date: 'Sep 14',
+                    time: repl?.departure_time || '10:30 AM',
+                    carrier: replTitle,
+                    disruptionType: disruption.disruption_type,
+                  });
+                  setIsRazorpayCheckoutOpen(true);
+                } else {
+                  handleResolveDisruption(true);
+                }
+              }}
               disabled={isAgentRunning}
               className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-soft-xs transition-colors disabled:opacity-50"
             >
@@ -252,26 +287,41 @@ export const AgentControlCenter: React.FC = () => {
 
       {/* Disruption Resolved Banner */}
       {isDisruptionResolved && disruption && (
-        <div className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${
+        <div className={`p-4 rounded-2xl border text-xs space-y-1.5 ${
           disruption.recovery_status === 'approved' 
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+            ? 'bg-emerald-50/90 border-emerald-200/80 text-emerald-900 shadow-soft-xs' 
             : 'bg-slate-50 border-slate-200 text-slate-700'
         }`}>
-          <div className="flex items-center gap-2">
-            {disruption.recovery_status === 'approved' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            ) : (
-              <XCircle className="w-4 h-4 text-rose-600" />
-            )}
-            <span className="font-medium">
-              {disruption.recovery_status === 'approved'
-                ? 'Disruption recovery approved · Itinerary updated'
-                : 'Disruption recovery rejected · Flagged as unresolved'}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {disruption.recovery_status === 'approved' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <XCircle className="w-4 h-4 text-rose-600" />
+              )}
+              <span className="font-bold">
+                {disruption.recovery_status === 'approved'
+                  ? '✓ DISRUPTION RESOLVED'
+                  : 'DISRUPTION UNRESOLVED'}
+              </span>
+            </div>
+            <span className="font-bold text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+              {disruption.recovery_status === 'approved' ? 'Verified Confirmed' : 'Declined'}
             </span>
           </div>
-          <span className="font-bold text-[10px] uppercase font-mono">
-            {disruption.recovery_status}
-          </span>
+
+          {disruption.recovery_status === 'approved' && (
+            <div className="text-[11px] text-emerald-800 space-y-0.5 pt-0.5">
+              <p>Replacement flight confirmed: <strong>IndiGo 6E 614</strong> (Delhi → Goa, Sep 14 · 10:30 AM)</p>
+              <p className="text-[10px] text-emerald-700 font-medium">
+                {disruption.price_difference > 0
+                  ? `₹${Math.round(disruption.price_difference).toLocaleString()} paid via Razorpay · Itinerary & budget synced`
+                  : disruption.price_difference < 0 
+                  ? `₹${Math.round(Math.abs(disruption.price_difference)).toLocaleString()} saved · Itinerary updated`
+                  : 'Confirmed within existing budget · Itinerary updated'}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

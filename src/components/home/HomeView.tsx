@@ -1,48 +1,43 @@
 import React from 'react';
-import { AIInputCard } from './AIInputCard';
-import { UpcomingTripCard } from './UpcomingTripCard';
-import { VoyageInsights } from './VoyageInsights';
+import { HomeHeader } from './HomeHeader';
+import { HeroJourneyCard } from './HeroJourneyCard';
+import { TravelMapCard } from './TravelMapCard';
+import { AIIntelligenceCards } from './AIIntelligenceCards';
+import { AgentStatusCard } from './AgentStatusCard';
+import { FinancialSnapshotCard } from './FinancialSnapshotCard';
+import { SpendingBreakdownCard } from './SpendingBreakdownCard';
 import { CuratedDestinations } from './CuratedDestinations';
-import { useApp } from '../../context/AppContext';
 
 export const HomeView: React.FC = () => {
-  const { userProfile } = useApp();
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
-
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-16">
-      {/* Top Header */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-voyage-gold-dark">
-            {getGreeting()}, {userProfile.name.split(' ')[0]}
-          </span>
-          <span className="w-1.5 h-1.5 rounded-full bg-voyage-gold" />
+    <div className="space-y-7 sm:space-y-9 w-full pb-16 animate-in fade-in duration-300">
+      {/* 1. Dashboard Header */}
+      <HomeHeader />
+
+      {/* 2. Primary Hero Grid: Next Journey + Travel Map (7:5 Split) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="lg:col-span-7">
+          <HeroJourneyCard />
         </div>
-        <h1 className="font-serif-luxury text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-voyage-dark">
-          Where are you going next?
-        </h1>
-        <p className="text-xs sm:text-sm text-voyage-muted max-w-xl">
-          Your autonomous luxury travel and financial companion. Plan custom itineraries, lock in vetted experiences, and maintain precision budget governance.
-        </p>
+        <div className="lg:col-span-5">
+          <TravelMapCard />
+        </div>
       </div>
 
-      {/* Hero AI Input Card */}
-      <AIInputCard />
+      {/* 3. AI Intelligence Visual Widgets Row */}
+      <AIIntelligenceCards />
 
-      {/* Upcoming Trip Section */}
-      <UpcomingTripCard />
+      {/* 4. Operations & Financial Snapshot Triad */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+        {/* Dark Obsidian Command Center Anchor */}
+        <AgentStatusCard />
+        {/* Warm Ivory Financial Snapshot */}
+        <FinancialSnapshotCard />
+        {/* Crisp Spending Data Visualization */}
+        <SpendingBreakdownCard />
+      </div>
 
-      {/* Voyage Insights */}
-      <VoyageInsights />
-
-      {/* Curated Destinations */}
+      {/* 5. Curated Inspiration Full Grid */}
       <CuratedDestinations />
     </div>
   );

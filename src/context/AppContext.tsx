@@ -13,7 +13,8 @@ import type {
   RecommendationProposal,
   ItineraryDay,
   ItineraryItem,
-  Transaction
+  Transaction,
+  CheckoutItem
 } from '../types';
 import { 
   mockTrips, 
@@ -30,14 +31,6 @@ import {
   resolveDisruption,
   type BackendAgentResponse 
 } from '../services/agentApi';
-
-interface CheckoutItem {
-  title: string;
-  amount: number;
-  currency: string;
-  description: string;
-  category: string;
-}
 
 interface AppContextType {
   currentPage: NavigationPage;
@@ -98,8 +91,49 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
+const getPageFromPathname = (): NavigationPage => {
+  if (typeof window === 'undefined') return 'home';
+  const path = window.location.pathname.replace(/^\/+/, '').split('/')[0].toLowerCase();
+  const validPages: NavigationPage[] = ['home', 'trips', 'explore', 'wallet', 'concierge', 'profile'];
+  if (validPages.includes(path as NavigationPage)) {
+    return path as NavigationPage;
+  }
+  return 'home';
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentPage, setCurrentPage] = useState<NavigationPage>('home');
+  const [currentPage, setCurrentPageState] = useState<NavigationPage>(() => getPageFromPathname());
+
+  useEffect(() => {
+    const initialPage = getPageFromPathname();
+    const currentPath = window.location.pathname;
+    const targetPath = (initialPage === 'home' && (currentPath === '/' || currentPath === '')) ? '/' : `/${initialPage}`;
+    window.history.replaceState({ page: initialPage }, '', targetPath);
+
+    const handlePopState = (event: PopStateEvent) => {
+      let targetPage: NavigationPage = 'home';
+      if (event.state && event.state.page) {
+        targetPage = event.state.page;
+      } else {
+        targetPage = getPageFromPathname();
+      }
+      setCurrentPageState(targetPage);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  const setCurrentPage = (page: NavigationPage) => {
+    setCurrentPageState((prev) => {
+      if (prev === page) return prev;
+      const targetPath = `/${page}`;
+      window.history.pushState({ page }, '', targetPath);
+      return page;
+    });
+  };
   const [trips, setTrips] = useState<Trip[]>(mockTrips);
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
   const [exploreItems] = useState<ExploreItem[]>(mockExploreItems);
@@ -670,6 +704,199 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }) => {
     if (!activeRecommendationResult) return;
 
+    const isDisruptionPayment = Boolean(activeCheckoutItem?.isDisruptionPayment || activeCheckoutItem?.originalBookingCost);
+    const bookingRef = `${payload.payment_reference || 'VOYAGE-BOOK'}-BK`;
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (isDisruptionPayment) {
+      // Disruption Recovery Payment Workflow
+      if (currentThreadId) {
+        try {
+          await resolveDisruption(currentThreadId, {
+            approved: true,
+            payment_id: payload.payment_id,
+            order_id: payload.order_id,
+            payment_status: 'paid',
+            payment_amount: payload.amount,
+          });
+        } catch (err) {
+          console.warn('Backend resolve disruption payment sync:', err);
+        }
+      }
+
+      // 1. Update active recommendation result: resolve disruption, replace flight in itinerary, update budget
+      setActiveRecommendationResult(prev => {
+        if (!prev) return null;
+
+        const currentEst = prev.breakdown?.totalEstimatedCost || 27900;
+        const currentRem = prev.breakdown?.remainingBuffer ?? 12100;
+        const newEstimated = currentEst + payload.amount;
+        const newRemaining = Math.max(0, currentRem - payload.amount);
+
+        // Update itinerary: replace cancelled flight with IndiGo 6E 614
+        const updatedItinerary = prev.itinerary.map(day => {
+          if (day.dayNumber === 1) {
+            const updatedItems = day.items.map(item => {
+              const isFlight = (item.category as string) === 'flight' || item.category === 'travel' || item.title.toLowerCase().includes('flight') || item.title.toLowerCase().includes('indigo');
+              if (isFlight) {
+                return {
+                  ...item,
+                  id: 'flt-indigo-goa-002',
+                  time: '10:30 AM',
+                  title: 'IndiGo 6E 614 [Confirmed Replacement]',
+                  estimatedCost: 8400,
+                  bookingRequired: false,
+                };
+              }
+              return item;
+            });
+            return { ...day, items: updatedItems };
+          }
+          return day;
+        });
+
+        return {
+          ...prev,
+          paymentStatus: 'paid',
+          bookingStatus: 'confirmed',
+          requiresApproval: false,
+          itinerary: updatedItinerary,
+          disruptionRecovery: prev.disruptionRecovery ? {
+            ...prev.disruptionRecovery,
+            disruption_detected: false,
+            recovery_status: 'approved',
+            price_difference: payload.amount,
+            additional_cost: payload.amount,
+          } : undefined,
+          breakdown: {
+            ...prev.breakdown,
+            totalEstimatedCost: newEstimated,
+            remainingBuffer: newRemaining,
+          },
+          paymentConfirmation: {
+            payment_id: payload.payment_id,
+            order_id: payload.order_id,
+            payment_reference: payload.payment_reference || 'VOYAGE-REF',
+            booking_reference: bookingRef,
+            amount: payload.amount,
+            currency: payload.currency || 'INR',
+            status: 'paid',
+            timestamp: new Date().toLocaleString(),
+            method: 'UPI / Card (Razorpay Secure)',
+          }
+        };
+      });
+
+      // 2. Add complete financial action trail to activity logs
+      setActivityLogs(prev => [
+        {
+          id: `log-budg-${Date.now()}-1`,
+          timestamp: now,
+          event: `✓ Budget recalculated: ₹12,100 → ₹10,900 remaining (Additional ₹${payload.amount.toLocaleString()} committed)`,
+          category: 'budget',
+        },
+        {
+          id: `log-itin-${Date.now()}-2`,
+          timestamp: now,
+          event: `✓ Itinerary updated: IndiGo 6E 614 confirmed (Delhi → Goa, 10:30 AM, ₹8,400)`,
+          category: 'complete',
+        },
+        {
+          id: `log-conf-${Date.now()}-3`,
+          timestamp: now,
+          event: `✓ Replacement confirmed: Disruption resolved successfully`,
+          category: 'complete',
+        },
+        {
+          id: `log-payv-${Date.now()}-4`,
+          timestamp: now,
+          event: `✓ Payment verified: Razorpay ID ${payload.payment_id}`,
+          category: 'budget',
+        },
+        {
+          id: `log-payi-${Date.now()}-5`,
+          timestamp: now,
+          event: `✓ Razorpay payment initiated (Order: ${payload.order_id})`,
+          category: 'budget',
+        },
+        {
+          id: `log-appr-${Date.now()}-6`,
+          timestamp: now,
+          event: `✓ User approved ₹${payload.amount.toLocaleString()}`,
+          category: 'system',
+        },
+        ...prev,
+      ]);
+
+      // 3. Update User Profile & Transactions
+      setUserProfile(prev => {
+        const currentSpent = prev.totalSpent || 27900;
+        const newSpent = currentSpent + payload.amount;
+        const newTx: Transaction = {
+          id: `tx_${Date.now()}`,
+          title: `Flight Replacement: IndiGo 6E 614 (Delhi → Goa)`,
+          category: 'Disruption Recovery',
+          date: 'Today',
+          amount: payload.amount,
+          currency: 'INR',
+          status: 'Settled',
+          razorpayPaymentId: payload.payment_id,
+          method: 'Razorpay Instant Settlement',
+        };
+        return {
+          ...prev,
+          totalSpent: newSpent,
+          transactions: [newTx, ...(prev.transactions || [])],
+        };
+      });
+
+      // 4. Update Trips state
+      setTrips(prev => {
+        return prev.map(t => {
+          if (t.destination.toLowerCase().includes('goa') || (activeRecommendationResult && t.destination.toLowerCase().includes(activeRecommendationResult.destination.toLowerCase()))) {
+            return {
+              ...t,
+              amountSpent: (t.amountSpent || 27900) + payload.amount,
+              itinerary: t.itinerary.map(day => {
+                if (day.day === 1) {
+                  return {
+                    ...day,
+                    items: day.items.map(item => {
+                      const isFlight = (item.category as string) === 'flight' || item.category === 'travel' || item.title.toLowerCase().includes('flight');
+                      if (isFlight) {
+                        return {
+                          ...item,
+                          id: 'flt-indigo-goa-002',
+                          title: 'IndiGo 6E 614 [Confirmed Replacement]',
+                          time: '10:30 AM',
+                          estimatedCost: 8400,
+                        };
+                      }
+                      return item;
+                    })
+                  };
+                }
+                return day;
+              })
+            };
+          }
+          return t;
+        });
+      });
+
+      // 5. Chat message confirmation
+      const confirmMsg: ChatMessage = {
+        id: `msg-agent-disp-conf-${Date.now()}`,
+        sender: 'agent',
+        text: `✓ Disruption resolved! Payment of ₹${payload.amount.toLocaleString()} verified via Razorpay (${payload.payment_id}).\n\nReplacement Flight Confirmed:\n• IndiGo 6E 614 (Delhi → Goa)\n• Sep 14 · 10:30 AM\n• Itinerary & trip budget updated (₹12,100 → ₹10,900 remaining).`,
+        timestamp: now,
+      };
+      setChatMessages(prev => [...prev, confirmMsg]);
+
+      return;
+    }
+
+    // Standard Full Trip Reservation Payment Workflow
     if (currentThreadId) {
       try {
         const res = await confirmPayment(currentThreadId, payload);
@@ -679,8 +906,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('Backend confirm payment sync:', err);
       }
     }
-
-    const bookingRef = `${payload.payment_reference || 'VOYAGE-BOOK'}-BK`;
 
     // 1. Update active recommendation result
     setActiveRecommendationResult(prev => prev ? {
@@ -786,7 +1011,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `msg-agent-conf-${Date.now()}`,
       sender: 'agent',
       text: `Payment of ₹${payload.amount.toLocaleString()} confirmed via Razorpay (${payload.payment_id}). Your trip to ${activeRecommendationResult.destination} is officially BOOKED!\n\nBooking Reference: ${bookingRef}\nWallet & Trips have been updated.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: now,
     };
     setChatMessages(prev => [...prev, confirmMsg]);
   };
@@ -893,13 +1118,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const result = mapBackendResponseToClient(response);
+
+      // If approved without extra payment (cheaper or same price), reflect savings/updates
+      if (approved && activeRecommendationResult?.disruptionRecovery) {
+        const priceDiff = activeRecommendationResult.disruptionRecovery.price_difference ?? 0;
+        const repl = activeRecommendationResult.disruptionRecovery.selected_replacement;
+        const replTitle = repl?.name || repl?.airline || repl?.title || 'Alternative Flight';
+
+        if (priceDiff < 0) {
+          const savings = Math.abs(priceDiff);
+          result.breakdown = {
+            ...result.breakdown,
+            remainingBuffer: (activeRecommendationResult.breakdown?.remainingBuffer ?? 12100) + savings,
+            totalEstimatedCost: (activeRecommendationResult.breakdown?.totalEstimatedCost ?? 27900) - savings,
+          };
+          setActivityLogs(prev => [
+            {
+              id: `log-budg-sav-${Date.now()}`,
+              timestamp: now,
+              event: `✓ Budget recalculated: Saved ₹${savings.toLocaleString()} on replacement booking`,
+              category: 'budget',
+            },
+            {
+              id: `log-itin-sav-${Date.now()}`,
+              timestamp: now,
+              event: `✓ Itinerary updated: ${replTitle} confirmed (${repl?.departure_time || '11:45 AM'})`,
+              category: 'complete',
+            },
+            {
+              id: `log-appr-sav-${Date.now()}`,
+              timestamp: now,
+              event: `✓ User approved replacement (No payment required — ₹${savings.toLocaleString()} saved)`,
+              category: 'system',
+            },
+            ...prev,
+          ]);
+        } else if (priceDiff === 0) {
+          setActivityLogs(prev => [
+            {
+              id: `log-itin-eq-${Date.now()}`,
+              timestamp: now,
+              event: `✓ Itinerary updated: ${replTitle} confirmed (${repl?.departure_time || '02:15 PM'})`,
+              category: 'complete',
+            },
+            {
+              id: `log-appr-eq-${Date.now()}`,
+              timestamp: now,
+              event: `✓ User approved replacement (No payment required — within existing budget)`,
+              category: 'system',
+            },
+            ...prev,
+          ]);
+        }
+      }
+
       setActiveRecommendationResult(result);
 
       const resMsg: ChatMessage = {
         id: `msg-res-${Date.now()}`,
         sender: 'agent',
         text: approved
-          ? `✅ Disruption recovery approved! Your revised itinerary has been updated and bookings confirmed.`
+          ? `✅ Disruption recovery approved! Your revised itinerary has been updated and confirmed.`
           : `❌ Disruption recovery declined. Original disrupted service remains flagged as unresolved.`,
         timestamp: now,
       };

@@ -93,6 +93,39 @@ export interface RazorpayOrderData {
   merchant_name?: string;
 }
 
+export type PaymentLifecycleState = 
+  | 'IDLE'
+  | 'PAYMENT_REVIEW'
+  | 'PAYMENT_METHOD_SELECTED'
+  | 'PAYMENT_INITIATED'
+  | 'PAYMENT_PROCESSING'
+  | 'PAYMENT_VERIFICATION'
+  | 'PAYMENT_SUCCESS'
+  | 'PAYMENT_FAILED'
+  | 'PAYMENT_CANCELLED'
+  | 'PAYMENT_RETRY';
+
+export interface CheckoutItem {
+  title: string;
+  amount: number;
+  currency: string;
+  description: string;
+  category: string;
+  isDisruptionPayment?: boolean;
+  originalBookingTitle?: string;
+  originalBookingCost?: number;
+  replacementTitle?: string;
+  replacementCost?: number;
+  additionalCost?: number;
+  savingsAmount?: number;
+  route?: string;
+  date?: string;
+  time?: string;
+  carrier?: string;
+  disruptionType?: string;
+  disruptionItemId?: string;
+}
+
 export interface PaymentConfirmationData {
   payment_id: string;
   order_id: string;
