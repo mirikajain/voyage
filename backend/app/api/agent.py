@@ -24,6 +24,12 @@ from app.models.payment_schemas import (
 from app.agent.graph import voyage_agent_app
 from app.agent.disruption_graph import voyage_disruption_app
 from app.services.payment_service import PaymentService
+from app.agent.guardrails import (
+    classify_input_scope,
+    validate_agent_output,
+    STANDARD_OUT_OF_SCOPE_RESPONSE,
+    STANDARD_CLARIFICATION_RESPONSE
+)
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
@@ -36,6 +42,8 @@ def _format_agent_response(thread_id: str, final_state: Dict[str, Any]) -> Agent
     rem_buf = float(final_state.get("remaining_budget", 0.0))
     is_exceeded = bool(final_state.get("is_budget_exceeded", False))
     compromise_msg = final_state.get("compromise_message")
+    if compromise_msg:
+        compromise_msg, _ = validate_agent_output(compromise_msg, final_state)
     ai_mode = final_state.get("ai_mode", "demo")
     intent = final_state.get("intent", "trip_planning")
 
@@ -56,7 +64,8 @@ def _format_agent_response(thread_id: str, final_state: Dict[str, Any]) -> Agent
     travel_source = flight.get("source", "Voyage Demo Provider")
     travel_is_live = bool(flight.get("is_live", False))
 
-    reasons = final_state.get("reasons", [])
+    raw_reasons = final_state.get("reasons", [])
+    reasons = [validate_agent_output(str(r), final_state)[0] for r in raw_reasons]
     itinerary = final_state.get("itinerary", [])
 
     breakdown = CostBreakdownSchema(
@@ -300,6 +309,60 @@ async def run_agent_workflow(request: AgentRunRequest):
         home_city = home_addr
     if not home_city:
         home_city = (request.user_preferences or {}).get("home_city") or (request.user_preferences or {}).get("homeCity") or existing_state.get("home_city")
+
+    # ---------------------------------------------------------
+    # Input Scope Classifier Guardrail
+    # Reject or Clarify BEFORE invoking model or expensive workflows
+    # ---------------------------------------------------------
+    guard_result = classify_input_scope(request.message, context=existing_state)
+
+    if guard_result.action == "reject":
+        rejection_event = {
+            "id": f"evt-{uuid.uuid4().hex[:8]}",
+            "timestamp": "Now",
+            "event": f"Scope Guardrail: Request redirected ({guard_result.category.value})",
+            "category": "system"
+        }
+        resp_msg = guard_result.suggested_response or STANDARD_OUT_OF_SCOPE_RESPONSE
+        return AgentRunResponse(
+            thread_id=thread_id,
+            status="completed",
+            intent="out_of_scope",
+            destination=existing_state.get("destination", "Trip"),
+            origin=existing_state.get("origin", "Mumbai"),
+            duration_days=existing_state.get("duration", 4),
+            estimated_total=float(existing_state.get("estimated_total", 0.0)),
+            remaining_budget=float(existing_state.get("remaining_budget", 0.0)),
+            reasons=[resp_msg],
+            compromise_message=resp_msg,
+            agent_events=existing_state.get("agent_events", []) + [rejection_event],
+            step_progress=[],
+            data_source_notice="Scope guardrails active"
+        )
+
+    if guard_result.action == "clarify":
+        clarify_event = {
+            "id": f"evt-{uuid.uuid4().hex[:8]}",
+            "timestamp": "Now",
+            "event": "Scope Guardrail: Requested clarification for ambiguous query",
+            "category": "system"
+        }
+        clarify_msg = guard_result.suggested_response or STANDARD_CLARIFICATION_RESPONSE
+        return AgentRunResponse(
+            thread_id=thread_id,
+            status="needs_input",
+            intent="ambiguous",
+            destination=existing_state.get("destination", "Pending"),
+            origin=existing_state.get("origin", "Mumbai"),
+            duration_days=existing_state.get("duration", 4),
+            estimated_total=0.0,
+            remaining_budget=0.0,
+            question=clarify_msg,
+            reasons=[clarify_msg],
+            missing_fields=["destination"],
+            agent_events=existing_state.get("agent_events", []) + [clarify_event],
+            step_progress=[]
+        )
 
     initial_state = {
         **existing_state,

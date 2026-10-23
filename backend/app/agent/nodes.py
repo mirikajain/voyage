@@ -27,6 +27,15 @@ from app.tools.payment_tools import (
     prepare_human_approval_request,
     create_razorpay_order
 )
+from app.agent.guardrails import (
+    classify_input_scope,
+    validate_tool_execution,
+    sanitize_retrieved_content,
+    validate_agent_output,
+    STANDARD_OUT_OF_SCOPE_RESPONSE,
+    STANDARD_CLARIFICATION_RESPONSE,
+    ScopeCategory
+)
 
 def _safe_log(msg: str):
     try:
@@ -52,6 +61,44 @@ def _add_event(events: List[Dict[str, Any]], event_text: str, category: str = "s
 def parse_request_node(state: AgentState) -> Dict[str, Any]:
     prompt = state.get("request") or state.get("message") or ""
     thread_id = state.get("thread_id") or "thread_default"
+
+    # Input Scope Guardrail: Early validation & rejection before model/tool execution
+    guard_result = classify_input_scope(prompt, context=dict(state))
+    if guard_result.action == "reject":
+        events = _add_event(
+            state.get("agent_events", []),
+            f"Scope Guardrail: Request redirected ({guard_result.category.value})",
+            "system"
+        )
+        return {
+            "intent": "out_of_scope",
+            "status": "needs_input",
+            "missing_fields": ["out_of_scope"],
+            "question": guard_result.suggested_response or STANDARD_OUT_OF_SCOPE_RESPONSE,
+            "reasons": [guard_result.suggested_response or STANDARD_OUT_OF_SCOPE_RESPONSE],
+            "compromise_message": guard_result.suggested_response or STANDARD_OUT_OF_SCOPE_RESPONSE,
+            "agent_events": events,
+            "needs_clarification": True,
+            "step_progress": []
+        }
+
+    if guard_result.action == "clarify":
+        events = _add_event(
+            state.get("agent_events", []),
+            "Scope Guardrail: Clarification requested for ambiguous input",
+            "system"
+        )
+        return {
+            "intent": "ambiguous",
+            "status": "needs_input",
+            "missing_fields": ["destination"],
+            "question": guard_result.suggested_response or STANDARD_CLARIFICATION_RESPONSE,
+            "reasons": [guard_result.suggested_response or STANDARD_CLARIFICATION_RESPONSE],
+            "compromise_message": guard_result.suggested_response or STANDARD_CLARIFICATION_RESPONSE,
+            "agent_events": events,
+            "needs_clarification": True,
+            "step_progress": []
+        }
     
     ai_mode = "demo"
     parsed = None
@@ -338,6 +385,22 @@ def collect_details_node(state: AgentState) -> Dict[str, Any]:
     missing = []
     question = None
 
+    if intent == "out_of_scope":
+        return {
+            "status": "needs_input",
+            "missing_fields": ["out_of_scope"],
+            "question": state.get("question") or STANDARD_OUT_OF_SCOPE_RESPONSE,
+            "needs_clarification": True
+        }
+
+    if intent == "ambiguous":
+        return {
+            "status": "needs_input",
+            "missing_fields": ["destination"],
+            "question": state.get("question") or STANDARD_CLARIFICATION_RESPONSE,
+            "needs_clarification": True
+        }
+
     if intent == "trip_planning":
         # Check if destination is completely missing
         if not dest:
@@ -507,10 +570,10 @@ def collect_details_node(state: AgentState) -> Dict[str, Any]:
 def route_after_collect_details(state: AgentState) -> str:
     """
     Conditional edge after collect_details.
-    If missing required information, routes to END (pausing turn for user clarification).
+    If missing required information or out of scope, routes to END (pausing turn for user clarification/redirect).
     Otherwise routes by intent to provider search or budget nodes.
     """
-    if state.get("status") == "needs_input" or state.get("missing_fields"):
+    if state.get("status") == "needs_input" or state.get("missing_fields") or state.get("intent") in ["out_of_scope", "ambiguous"]:
         return "needs_input"
     
     intent = state.get("intent", "trip_planning")
@@ -554,11 +617,19 @@ def search_flights_node(state: AgentState) -> Dict[str, Any]:
     orig = state.get("origin", "Delhi")
     dep_date = state.get("departure_date")
 
+    is_valid, err = validate_tool_execution("search_flights", {"destination": dest, "origin": orig}, state)
+    if not is_valid:
+        return {
+            "error": err,
+            "search_results": {"type": "flights", "items": [], "total_count": 0, "provider": "Security Guardrail", "is_live": False}
+        }
+
     flights = TravelService.search_flights(
         destination=dest,
         origin=orig,
         departure_date=dep_date
     )
+    flights = sanitize_retrieved_content(flights)
 
     flight_live = bool(flights and flights[0].is_live)
     prov = flights[0].source if flights else "Voyage Demo Provider"
@@ -597,7 +668,15 @@ def search_hotels_node(state: AgentState) -> Dict[str, Any]:
     duration = state.get("duration", 4)
     hotel_budget = state.get("hotel_budget") or (state.get("budget_envelopes") or {}).get("hotel")
 
+    is_valid, err = validate_tool_execution("search_hotels", {"destination": dest, "duration_days": duration}, state)
+    if not is_valid:
+        return {
+            "error": err,
+            "search_results": {"type": "hotels", "items": [], "total_count": 0, "provider": "Security Guardrail", "is_live": False}
+        }
+
     hotels = TravelService.search_hotels(destination=dest, duration_days=duration)
+    hotels = sanitize_retrieved_content(hotels)
     
     # If hotel budget is specified (e.g. "Show hotels in Goa under ₹5,000"), prioritize matching options
     if hotel_budget:
@@ -1877,22 +1956,26 @@ def execute_payment_node(state: AgentState) -> Dict[str, Any]:
     ref = state.get("payment_reference") or f"VOYAGE-{uuid.uuid4().hex[:6].upper()}"
     events = state.get("agent_events", [])
 
-    if not approved:
+    # Server-side tool validation for consequential financial transaction
+    is_valid, err = validate_tool_execution("confirm_razorpay_payment", {"amount_in_rupees": total}, state)
+    if not is_valid or not approved:
+        block_msg = err or f"Payment authorization cancelled by user for reference {ref}. No charge was made."
         events = _add_event(
             events,
-            f"Payment authorization cancelled by user for reference {ref}. No charge was made.",
+            block_msg,
             "system"
         )
         steps = list(state.get("step_progress", []))
         for s in steps:
             if s["id"] == "step-8":
                 s["status"] = "complete"
-                s["completed_description"] = "Payment cancelled by user"
+                s["completed_description"] = "Payment cancelled or blocked by guardrail"
         return {
             "payment_status": "cancelled",
             "booking_status": "failed",
             "requires_approval": False,
             "approval_status": "rejected",
+            "error": err if not is_valid else None,
             "agent_events": events,
             "step_progress": steps
         }
