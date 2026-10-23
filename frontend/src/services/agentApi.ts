@@ -197,7 +197,19 @@ export interface BackendAgentResponse {
   error?: string;
 }
 
-const API_BASE_URL = '/api/agent';
+const getServerUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return 'https://voyage-1-e6ir.onrender.com';
+  }
+  return '';
+};
+
+export const BASE_SERVER_URL = getServerUrl();
+const API_BASE_URL = `${BASE_SERVER_URL}/api/agent`;
 
 export async function runAgent(
   message: string,
@@ -302,7 +314,7 @@ export async function createPaymentOrder(payload: {
   mode?: string;
   merchant_name?: string;
 }> {
-  const response = await fetch('/api/payment/create-order', {
+  const response = await fetch(`${BASE_SERVER_URL}/api/payment/create-order`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -335,7 +347,7 @@ export async function verifyPaymentSignature(payload: {
   booking_reference?: string;
   agent_response?: BackendAgentResponse;
 }> {
-  const response = await fetch('/api/payment/verify', {
+  const response = await fetch(`${BASE_SERVER_URL}/api/payment/verify`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
