@@ -23,36 +23,6 @@
 
 ---
 
-## Scope Guardrails & Security Architecture
-
-Voyage implements a multi-layered production guardrail system that ensures the agent strictly stays within its intended travel domain while maintaining high responsiveness:
-
-1. **Input Scope Classification** (`app/agent/guardrails.py`):
-   - Fast deterministic classification with zero latency overhead and zero external token consumption.
-   - Categorizes inputs into `IN_SCOPE`, `TRAVEL_ADJACENT`, `OUT_OF_SCOPE`, `PROMPT_INJECTION`, or `AMBIGUOUS`.
-   - Rejects out-of-scope requests (coding, math tutoring, recipes, unrelated lifestyle questions) immediately before running expensive LLM calls or external APIs.
-   - Detects prompt injection and instruction override attempts, redirecting politely without exposing internal directives.
-   - Solicits brief clarifications for ambiguous or under-specified queries.
-
-2. **Conversation Context Awareness**:
-   - Preserves state across multi-turn interactions. Contextual follow-ups (e.g., *"What alternatives do I have?"*, *"Which one is cheaper?"*, *"Can we do 3 days instead?"*) remain accepted when continuing an active travel task.
-   - Ensures previous travel context does not grant a blanket pass to unrelated topics introduced later.
-
-3. **Tool Execution Protection & Allowlisting**:
-   - Backend-enforced tool permission allowlist prevents arbitrary code execution, unauthorized URL fetching, or unsanctioned tool invocations.
-   - Validates arguments against strict schemas.
-   - Protects consequential actions (e.g. Razorpay order creation and payment confirmation) by strictly requiring human approval.
-
-4. **Indirect Prompt Injection Neutralization**:
-   - Automatically sanitizes untrusted retrieved data (partner reviews, airline notices, hotel descriptions) to strip out malicious system commands before model ingestion.
-
-5. **Safe Output Validation**:
-   - Automatically redacts API keys, credentials, and internal prompt leak fragments.
-   - Prevents the agent from claiming completed bookings or processed payments unless verified by backend transaction state.
-   - Ensures transparent, honest explanations when external partner services encounter rate limits or outages.
-
----
-
 ## Tech Stack
 
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons
@@ -88,5 +58,5 @@ npm run dev
 ```bash
 cd backend
 source .venv/bin/activate
-PYTHONPATH=. pytest tests/test_guardrails.py -v
+PYTHONPATH=. pytest tests/ -v
 ```
