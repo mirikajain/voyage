@@ -1,4 +1,5 @@
-export type NavigationPage = 'home' | 'concierge' | 'trips' | 'explore' | 'wallet' | 'profile';
+export type NavigationPage = 'home' | 'concierge' | 'trips' | 'trip-detail' | 'explore' | 'wallet' | 'profile' | 'notifications';
+
 
 export type ExploreCategory = 'hotels' | 'flights' | 'restaurants' | 'activities' | 'transport';
 
@@ -251,8 +252,9 @@ export interface Trip {
   totalBudget: number;
   amountSpent: number;
   currency: string;
-  status: 'Upcoming' | 'Active Planning' | 'Past' | 'Booked';
+  status: 'Upcoming' | 'Active Planning' | 'Past' | 'Booked' | 'Cancelled';
   travelVibe: string;
+  travelers?: number;
   bookingReference?: string;
   paymentReference?: string;
   paymentStatus?: string;

@@ -1,12 +1,14 @@
 import React from 'react';
 import { useApp } from './context/AppContext';
 import { TopNavbar } from './components/layout/TopNavbar';
+import { Sidebar } from './components/layout/Sidebar';
 import { GlobalAIModal } from './components/layout/GlobalAIModal';
 import { FloatingAIButton } from './components/layout/FloatingAIButton';
 import { RazorpayCheckoutModal } from './components/common/RazorpayCheckoutModal';
 
 import { HomeView } from './components/home/HomeView';
 import { TripsView } from './components/trips/TripsView';
+import { TripDetailView } from './components/trips/TripDetailView';
 import { ExploreView } from './components/explore/ExploreView';
 import { WalletView } from './components/wallet/WalletView';
 import { ProfileView } from './components/profile/ProfileView';
@@ -21,6 +23,8 @@ export const MainContent: React.FC = () => {
         return <HomeView />;
       case 'trips':
         return <TripsView />;
+      case 'trip-detail':
+        return <TripDetailView />;
       case 'explore':
         return <ExploreView />;
       case 'wallet':
@@ -29,20 +33,25 @@ export const MainContent: React.FC = () => {
         return <ProfileView />;
       case 'concierge':
         return <ConciergeView />;
+      case 'notifications':
+        return <HomeView />;
       default:
         return <HomeView />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-voyage-bg text-voyage-dark font-sans flex flex-col transition-colors duration-300">
-      {/* Compact Horizontal Top Navigation */}
+    <div className="min-h-screen bg-[#F8F6F1] text-voyage-dark font-sans flex flex-col transition-colors duration-200">
+      {/* Top Horizontal Navbar */}
       <TopNavbar />
 
-      {/* Dynamic Main Dashboard Container */}
-      <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl w-full mx-auto">
-        {renderCurrentView()}
-      </main>
+      {/* Main Container with Sidebar + Content */}
+      <div className="flex-1 flex w-full max-w-[1536px] mx-auto px-2 sm:px-4">
+        <Sidebar />
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
+          {renderCurrentView()}
+        </main>
+      </div>
 
       {/* Global Floating AI Trigger Button */}
       <FloatingAIButton />
