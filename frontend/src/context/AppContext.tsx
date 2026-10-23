@@ -22,7 +22,7 @@ import {
   mockUserProfile, 
   defaultRecommendation 
 } from '../data/mockData';
-import { initialAgentSteps, parseTravelPrompt } from '../services/agentService';
+import { initialAgentSteps, parseTravelPrompt, executeAgentWorkflow } from '../services/agentService';
 import { 
   runAgent, 
   resumeAgentApproval, 
@@ -587,14 +587,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setChatMessages(prev => [...prev, finalAgentMsg]);
     } catch (err: any) {
-      setIsAgentRunning(false);
-      const errorMsg: ChatMessage = {
-        id: `msg-agent-err-${Date.now()}`,
-        sender: 'agent',
-        text: `Error contacting LangGraph agent backend: ${err?.message || err}. Please ensure the backend is running.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setChatMessages(prev => [...prev, errorMsg]);
+      console.warn('Backend slow or unreachable, executing resilient client planning fallback:', err);
+      try {
+        await executeAgentWorkflow(promptText, userProfile, {
+          onStepUpdate: (steps) => setWorkflowSteps(steps),
+          onLogUpdate: (logs) => setActivityLogs(logs),
+          onRecommendationReady: (rec) => {
+            setActiveRecommendationResult(rec);
+            setIsAgentRunning(false);
+            const agentMsg: ChatMessage = {
+              id: `msg-agent-${Date.now()}`,
+              sender: 'agent',
+              text: `Here is your curated plan for ${rec.destination}. Estimated budget is ₹${rec.breakdown.totalEstimatedCost.toLocaleString('en-IN')}.`,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              recommendation: rec,
+              quickPrompts: ['Book with Voyage', 'Review full itinerary', 'Adjust budget'],
+            };
+            setChatMessages(prev => [...prev, agentMsg]);
+          },
+          onError: (fallbackErr) => {
+            setIsAgentRunning(false);
+            const errorMsg: ChatMessage = {
+              id: `msg-agent-err-${Date.now()}`,
+              sender: 'agent',
+              text: `Unable to complete planning: ${fallbackErr}`,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+            setChatMessages(prev => [...prev, errorMsg]);
+          }
+        });
+      } catch (fallbackError: any) {
+        setIsAgentRunning(false);
+        const errorMsg: ChatMessage = {
+          id: `msg-agent-err-${Date.now()}`,
+          sender: 'agent',
+          text: `Service is temporarily busy. Please try again in a few moments.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setChatMessages(prev => [...prev, errorMsg]);
+      }
     }
   };
 
