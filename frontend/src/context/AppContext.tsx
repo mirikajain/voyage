@@ -172,8 +172,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isRazorpayCheckoutOpen, setIsRazorpayCheckoutOpen] = useState(false);
   const [activeCheckoutItem, setActiveCheckoutItem] = useState<CheckoutItem | null>(null);
 
-  // Agent State
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  // Agent State with Welcoming Initial Greeting
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
+    {
+      id: 'msg-welcome-agent',
+      sender: 'agent',
+      text: 'Hello Advait! 👋 I am Voyage, your autonomous travel concierge. Where would you like to travel next, or how can I assist you with your journey today?',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      quickPrompts: [
+        'Plan a 4-day Goa trip under ₹40,000',
+        'Find luxury boutique hotels in Paris',
+        'Check flights from Delhi to Goa',
+        'Find top restaurants in Kyoto'
+      ]
+    }
+  ]);
   const [workflowSteps, setWorkflowSteps] = useState<AgentWorkflowStep[]>(initialAgentSteps);
   const [activityLogs, setActivityLogs] = useState<AgentActivityLogItem[]>([]);
   const [activeRecommendationResult, setActiveRecommendationResult] = useState<AgentRecommendationResult | null>(null);
@@ -1209,11 +1222,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     runAgentPlanning(`Plan a ${days}-day ${dest} trip under ₹${newBudget.toLocaleString()}`);
   };
 
-  // Initialize with standard example on first load
+  // Initialize without auto-sending user prompts
   useEffect(() => {
     if (!isInitialized.current) {
       isInitialized.current = true;
-      runAgentPlanning('Plan a 4-day Goa trip under ₹40,000');
     }
   }, []);
 
