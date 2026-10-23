@@ -94,7 +94,7 @@ const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const getPageFromPathname = (): NavigationPage => {
   if (typeof window === 'undefined') return 'home';
   const path = window.location.pathname.replace(/^\/+/, '').split('/')[0].toLowerCase();
-  const validPages: NavigationPage[] = ['home', 'trips', 'explore', 'wallet', 'concierge', 'profile'];
+  const validPages: NavigationPage[] = ['home', 'trips', 'trip-detail', 'explore', 'wallet', 'concierge', 'profile', 'notifications'];
   if (validPages.includes(path as NavigationPage)) {
     return path as NavigationPage;
   }
