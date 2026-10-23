@@ -477,10 +477,11 @@ async def confirm_payment_endpoint(thread_id: str, request: ConfirmPaymentReques
         state_dict["requires_approval"] = False
         state_dict["payment_confirmation"] = confirmation
 
-        from app.agent.nodes import _add_event
+        pid = getattr(confirmation, 'payment_id', None) or (confirmation.get('payment_id') if isinstance(confirmation, dict) else '')
+        bref = getattr(confirmation, 'booking_reference', None) or (confirmation.get('booking_reference') if isinstance(confirmation, dict) else '')
         events = _add_event(
             state_dict.get("agent_events", []),
-            f"Payment confirmed via Razorpay: {confirmation['payment_id']} (Ref: {confirmation['booking_reference']})",
+            f"Payment confirmed via Razorpay: {pid} (Ref: {bref})",
             "complete"
         )
         state_dict["agent_events"] = events
