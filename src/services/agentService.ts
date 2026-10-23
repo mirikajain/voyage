@@ -62,7 +62,7 @@ export function parseTravelPrompt(prompt: string): {
   intent: 'trip_planning' | 'flight_search' | 'hotel_search' | 'restaurant_search' | 'activity_search';
   destination: string;
   origin: string;
-  durationDays: number;
+  durationDays: number | null;
   budget: number | null;
 } {
   const rawClean = prompt.replace(/\?/g, ' ').replace(/,/g, '');
@@ -153,7 +153,7 @@ export function parseTravelPrompt(prompt: string): {
   }
 
   if (!destination) {
-    destination = 'Goa';
+    destination = '';
   }
 
   // 3. Duration detection (e.g. "2-day", "2 days", "weekend", "5 nights")
@@ -169,10 +169,6 @@ export function parseTravelPrompt(prompt: string): {
     durationDays = 4;
   } else if (/five\s+day|5\s+day/i.test(lower)) {
     durationDays = 5;
-  }
-
-  if (durationDays === null) {
-    durationDays = 4;
   }
 
   // 4. Budget detection (e.g. "₹25,000", "25k", "1.5 lakh", "under 25000")
@@ -245,13 +241,16 @@ export async function executeAgentWorkflow(
     updateSteps(2, 'active');
     addLog(`Searching external travel partner network for ${destination}...`, 'tool');
     
+    const effectiveDest = destination || 'Goa';
+    const effectiveDays = durationDays || 4;
+
     // Call simulated tool functions
     const [hotels, flight, dining, activities, transport] = await Promise.all([
-      searchHotels(destination, durationDays),
-      searchFlights(destination),
-      searchDining(destination, durationDays),
-      searchActivities(destination, durationDays),
-      searchTransport(destination, durationDays),
+      searchHotels(effectiveDest, effectiveDays),
+      searchFlights(effectiveDest),
+      searchDining(effectiveDest, effectiveDays),
+      searchActivities(effectiveDest, effectiveDays),
+      searchTransport(effectiveDest, effectiveDays),
     ]);
 
     addLog(`Hotel results: Found "${hotels[0].name}" via simulated partner GDS`, 'tool');
@@ -294,7 +293,7 @@ export async function executeAgentWorkflow(
         dayTitle: `Arrival & ${destination} Exploration`,
         items: [
           { time: '10:30 AM', title: `Arrival & Private EV Transfer`, location: `${destination} Airport`, category: 'transport', cost: 1100 },
-          { time: '01:30 PM', title: `Check-in at ${hotels[0].name}`, location: hotels[0].location, category: 'hotel', cost: Math.round(hotelCost / Math.max(1, durationDays - 1)) },
+          { time: '01:30 PM', title: `Check-in at ${hotels[0].name}`, location: hotels[0].location, category: 'hotel', cost: Math.round(hotelCost / Math.max(1, effectiveDays - 1)) },
           { time: '05:30 PM', title: `Guided Sunset Highlights Tour`, location: destination, category: 'activity', cost: 1800 },
           { time: '08:00 PM', title: `Welcome Chef Tasting Dinner`, location: destination, category: 'dining', cost: 2400 },
         ],
@@ -324,12 +323,12 @@ export async function executeAgentWorkflow(
     };
 
     const recommendationResult: AgentRecommendationResult = {
-      id: `rec-${destination.toLowerCase()}-${Date.now()}`,
-      planTitle: `YOUR ${destination.toUpperCase()} PLAN`,
+      id: `rec-${effectiveDest.toLowerCase()}-${Date.now()}`,
+      planTitle: `YOUR ${effectiveDest.toUpperCase()} PLAN`,
       intent,
-      destination,
+      destination: effectiveDest,
       origin,
-      durationDays,
+      durationDays: effectiveDays,
       breakdown,
       reasons: isBudgetExceeded && budget
         ? [

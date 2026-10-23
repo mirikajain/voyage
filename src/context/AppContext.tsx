@@ -426,7 +426,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const runAgentPlanning = async (promptText: string) => {
-    const { intent, destination, origin, durationDays, budget } = parseTravelPrompt(promptText);
+    const { intent, destination, origin } = parseTravelPrompt(promptText);
 
     // 1. Append user request to chat
     const userMsg: ChatMessage = {
@@ -436,26 +436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // 2. Append agent thinking acknowledgment
-    let ackText = `I'll build a ${durationDays}-day ${destination} itinerary${budget ? ` around your ₹${budget.toLocaleString()} budget` : ''}. I'll check accommodation, activities, dining and transport while keeping the trip balanced.`;
-    if (intent === 'flight_search') {
-      ackText = `I'm searching flights from ${origin} to ${destination}. Querying live airline schedules and fares...`;
-    } else if (intent === 'hotel_search') {
-      ackText = `I'm searching accommodations and boutique stays in ${destination}...`;
-    } else if (intent === 'restaurant_search') {
-      ackText = `I'm searching top-rated restaurants and dining venues in ${destination}...`;
-    } else if (intent === 'activity_search') {
-      ackText = `I'm finding curated activities and experiences in ${destination}...`;
-    }
-
-    const agentAckMsg: ChatMessage = {
-      id: `msg-agent-ack-${Date.now()}`,
-      sender: 'agent',
-      text: ackText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setChatMessages(prev => [...prev, userMsg, agentAckMsg]);
+    setChatMessages(prev => [...prev, userMsg]);
     setIsAgentRunning(true);
     setActiveRecommendationResult(null);
 
