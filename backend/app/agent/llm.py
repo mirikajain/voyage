@@ -39,7 +39,8 @@ def get_gemini_model() -> Optional[Any]:
         _llm_instance = ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=api_key,
-            temperature=0.1
+            temperature=0.1,
+            max_retries=1
         )
         _llm_initialized = True
         return _llm_instance
