@@ -556,6 +556,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
+      // Handle out_of_scope redirection
+      if (backendResponse.intent === 'out_of_scope') {
+        setIsAgentRunning(false);
+        setActiveRecommendationResult(null);
+        const outOfScopeMsg = backendResponse.reasons?.[0] || backendResponse.compromise_message || "I'm your travel assistant, so I can help with flights, disruptions, hotels, itineraries, airport transfers, and related travel arrangements. I can't help with unrelated requests, but I'd be happy to assist with your travel plans.";
+        const finalAgentMsg: ChatMessage = {
+          id: `msg-agent-rec-${Date.now()}`,
+          sender: 'agent',
+          text: outOfScopeMsg,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          quickPrompts: ['Plan a 4-day Goa trip under ₹40,000', 'Search flights to Mumbai', 'Find hotels in Kyoto'],
+        };
+        setChatMessages(prev => [...prev, finalAgentMsg]);
+        return;
+      }
+
       const clientRec = mapBackendResponseToClient(backendResponse);
       setActiveRecommendationResult(clientRec);
       setIsAgentRunning(false);
@@ -568,9 +584,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else if (backendResponse.intent === 'hotel_search') {
         finalMsgText = `Found verified luxury boutique accommodations in ${backendResponse.destination}.`;
       } else if (backendResponse.intent === 'restaurant_search') {
-        finalMsgText = `Found top-rated dining venues and cafés in ${backendResponse.destination}.`;
+        const count = backendResponse.search_results?.total_count || backendResponse.search_results?.items?.length || 2;
+        finalMsgText = `Found ${count} top-rated dining venues and cafés in ${backendResponse.destination}.`;
       } else if (backendResponse.intent === 'activity_search') {
-        finalMsgText = `Found curated activities and cultural experiences in ${backendResponse.destination}.`;
+        const count = backendResponse.search_results?.total_count || backendResponse.search_results?.items?.length || 3;
+        finalMsgText = `Found ${count} curated activities and cultural experiences in ${backendResponse.destination}.`;
       } else {
         finalMsgText = clientRec.isBudgetExceeded && clientRec.compromiseMessage
           ? clientRec.compromiseMessage
@@ -583,11 +601,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ? ['Book top flight option', 'Find hotels near airport', 'Plan full itinerary for ' + clientRec.destination]
         : (backendResponse.intent === 'hotel_search'
             ? ['Reserve suite', 'Find flights to ' + clientRec.destination, 'Plan full trip']
-            : (clientRec.categoryStatus?.hotel === 'Hotel budget too low'
-                ? ['Increase hotel budget to ₹15,000', 'Show available hotel alternatives', 'Book with Voyage']
-                : (clientRec.isBudgetExceeded
-                    ? [`Adjust budget for ${clientRec.destination}`, 'Reduce activity count', 'Show value stay options']
-                    : ['Book with Voyage', 'Review full itinerary', 'Adjust budget'])));
+            : (backendResponse.intent === 'restaurant_search'
+                ? ['Find hotels in ' + clientRec.destination, 'Explore activities in ' + clientRec.destination, 'Plan full trip to ' + clientRec.destination]
+                : (backendResponse.intent === 'activity_search'
+                    ? ['Find hotels in ' + clientRec.destination, 'Top restaurants in ' + clientRec.destination, 'Plan full trip to ' + clientRec.destination]
+                    : (clientRec.categoryStatus?.hotel === 'Hotel budget too low'
+                        ? ['Increase hotel budget to ₹15,000', 'Show available hotel alternatives', 'Book with Voyage']
+                        : (clientRec.isBudgetExceeded
+                            ? [`Adjust budget for ${clientRec.destination}`, 'Reduce activity count', 'Show value stay options']
+                            : ['Book with Voyage', 'Review full itinerary', 'Adjust budget'])))));
 
       const finalAgentMsg: ChatMessage = {
         id: `msg-agent-rec-${Date.now()}`,

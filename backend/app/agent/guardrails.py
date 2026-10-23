@@ -134,7 +134,10 @@ TRAVEL_CORE_KEYWORDS = [
     "itinerary", "vacation", "trip", "holiday", "tour", "travel", "tourism", "destination",
     "hotel", "hotels", "resort", "resorts", "hostel", "hostels", "stay", "stays",
     "accommodation", "accommodations", "villa", "villas", "room", "rooms", "check-in", "checkout",
-    "sightseeing", "excursion", "attraction", "attractions", "guide", "day trip",
+    "sightseeing", "excursion", "attraction", "attractions", "guide", "day trip", "things to do",
+    "activity", "activities", "experience", "experiences", "monument", "monuments",
+    "restaurant", "restaurants", "dining", "dinner", "lunch", "breakfast", "cafe", "cafes", "café", "cafés",
+    "bistro", "bistros", "eatery", "eateries", "food", "cuisine", "gastronomy", "local dishes",
     "disruption", "delay", "delays", "delayed", "cancellation", "cancelled", "cancel",
     "reschedule", "rebook", "rebooking", "compensation", "claim", "claims", "refund",
     "baggage", "luggage", "carry-on", "lost baggage", "notam", "aviationstack",
@@ -142,8 +145,8 @@ TRAVEL_CORE_KEYWORDS = [
     "car rental", "rental car", "train", "metro", "transit", "uber", "driver",
     "travel insurance", "insurance", "policy", "visa", "passport", "consulate", "customs",
     "boarding pass", "gate", "runway", "jet lag", "currency", "forex", "exchange rate",
-    "goa", "mumbai", "delhi", "bangalore", "jaipur", "paris", "tokyo", "london", "dubai",
-    "rome", "bali", "singapore", "new york", "budget", "per night"
+    "goa", "mumbai", "delhi", "bangalore", "jaipur", "paris", "tokyo", "kyoto", "london", "dubai",
+    "rome", "bali", "singapore", "new york", "amalfi", "udaipur", "manali", "kashmir", "kerala", "budget", "per night"
 ]
 
 TRAVEL_ADJACENT_PATTERNS = [
@@ -238,10 +241,15 @@ def classify_input_scope(
     has_explicit_travel_action = any(
         kw in msg_lower for kw in [
             "hotel", "hotels", "flight", "flights", "book", "trip", "itinerary",
-            "vacation", "airport", "stay", "accommodation", "transfer"
+            "vacation", "airport", "stay", "accommodation", "transfer",
+            "restaurant", "restaurants", "dining", "eatery", "eateries", "cafe", "cafes",
+            "activity", "activities", "things to do", "attraction", "attractions", "sightseeing"
         ]
     ) and any(
-        kw in msg_lower for kw in ["find", "plan", "book", "search", "near", "reserve", "to", "in"]
+        kw in msg_lower for kw in [
+            "find", "plan", "book", "search", "near", "reserve", "to", "in", "at",
+            "top", "best", "recommend", "show", "what", "where"
+        ]
     )
 
     # -------------------------------------------------------------

@@ -326,3 +326,12 @@ def test_unauthorized_tool_execution_blocked():
     assert is_valid is False
     assert "not in the authorized travel tool allowlist" in err
 
+
+def test_restaurant_search_in_kyoto_accepted():
+    """Ensure destination restaurant and dining discovery is accepted as in-scope."""
+    query = "Find top restaurants in Kyoto"
+    res = classify_input_scope(query)
+    assert res.is_allowed is True
+    assert res.category == ScopeCategory.IN_SCOPE
+
+
