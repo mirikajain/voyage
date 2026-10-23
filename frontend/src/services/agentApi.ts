@@ -217,25 +217,39 @@ export async function runAgent(
   userPreferences?: any,
   homeAddress?: any
 ): Promise<BackendAgentResponse> {
-  const response = await fetch(`${API_BASE_URL}/run`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      message,
-      thread_id: threadId,
-      user_preferences: userPreferences,
-      home_address: homeAddress,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Agent backend error (${response.status}): ${errText}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}/run`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message,
+        thread_id: threadId,
+        user_preferences: userPreferences,
+        home_address: homeAddress,
+      }),
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Agent backend error (${response.status}): ${errText}`);
+    }
+
+    return response.json();
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Agent backend request timed out after 15s');
+    }
+    throw err;
   }
-
-  return response.json();
 }
 
 export async function resumeAgentApproval(
